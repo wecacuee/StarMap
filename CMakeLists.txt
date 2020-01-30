@@ -15,11 +15,12 @@ find_package(catkin REQUIRED COMPONENTS
     )
 
 ## System dependencies are found with CMake's conventions
-find_package(Boost REQUIRED COMPONENTS system)
+find_package(Boost REQUIRED COMPONENTS system program_options)
 find_package(Torch REQUIRED)
-find_package(OpenCV REQUIRED)
-find_package(Eigen3 REQUIRED)
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${TORCH_CXX_FLAGS}")
+find_package(OpenCV 3.4 REQUIRED)
+find_package(Eigen3 REQUIRED)
+find_package( gsl-lite 0.36 REQUIRED )
 
 
 ## Uncomment this if the package has a setup.py. This macro ensures
@@ -124,11 +125,16 @@ include_directories(
  include
  ${catkin_INCLUDE_DIRS}
 )
+set(CMAKE_CXX_STANDARD 11)
 
 ## Declare a C++ library
-# add_library(${PROJECT_NAME}
-#   src/${PROJECT_NAME}/kp_detector.cpp
-# )
+add_library(${PROJECT_NAME}
+        src/starmap.cpp
+)
+target_link_libraries(${PROJECT_NAME}
+        "${OpenCV_LIBRARIES}"
+        gsl::gsl-lite
+)
 
 ## Add cmake target dependencies of the library
 ## as an example, code may need to be generated before libraries
@@ -138,7 +144,7 @@ include_directories(
 ## Declare a C++ executable
 ## With catkin_make all packages are built within a single CMake context
 ## The recommended prefix ensures that target names across packages don't collide
-add_executable(${PROJECT_NAME}_demo src/starmap.cpp)
+add_executable(${PROJECT_NAME}_demo src/starmap_demo.cpp)
 
 ## Rename C++ executable without prefix
 ## The above recommended prefix causes long target names, the following renames the
@@ -153,6 +159,7 @@ set_target_properties(${PROJECT_NAME}_demo PROPERTIES CXX_STANDARD 11)
 
 ## Specify libraries to link a library or executable target against
 target_link_libraries(${PROJECT_NAME}_demo
+   ${PROJECT_NAME}
    ${catkin_LIBRARIES}
    "${TORCH_LIBRARIES}"
    "${Boost_LIBRARIES}"
