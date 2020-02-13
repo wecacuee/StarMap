@@ -96,7 +96,8 @@ def rotmat_2D_from_angle(angle):
 
 
 def NewCrop(img, center, max_side, rot, desired_side, points=np.zeros((0,2)),
-            return_points=False):
+            return_points=False,
+            debug_img=lambda name, img: 0):
   """
   Scale and Crop and fit the image into the desired_side x desired_side
 
@@ -106,7 +107,7 @@ def NewCrop(img, center, max_side, rot, desired_side, points=np.zeros((0,2)),
   resized_img = cv2.resize(img,
                             ((img.shape[1] * desired_side // max_side),
                              (img.shape[0] * desired_side // max_side)))
-  resized_points = points * desired_side / max_side
+  debug_img("resized", resized_img)
 
   # Cropping begins here
   # The image rectangle clockwise
@@ -116,7 +117,7 @@ def NewCrop(img, center, max_side, rot, desired_side, points=np.zeros((0,2)),
     [resized_img.shape[1], resized_img.shape[0]],
     [0, resized_img.shape[0]],
   ])
-  resized_max_side = max(resized_img.shape[:1])
+  resized_max_side = max(resized_img.shape[:2])
 
   # Project the rectangle from source image to target image
   # TODO account for rotation
@@ -127,7 +128,9 @@ def NewCrop(img, center, max_side, rot, desired_side, points=np.zeros((0,2)),
       (R @ (rect_resized - resized_img_center).T).T
       + target_center
   ))
-  target_points = (R @ (resized_points - resized_img_center).T).T + target_center
+  img_center = np.array([[img.shape[1], img.shape[0]]]) / 2
+  target_points = (((desired_side / max_side) * R @ (points - img_center).T).T
+                   + target_center)
 
   # Find the range of the rectangle
   mins_target = np.maximum(np.min(rect_target, axis=-2),
