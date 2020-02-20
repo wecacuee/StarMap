@@ -9,11 +9,11 @@ import numpy as np
 import cv2
 from starmap import ref
 import torch
-from datasets.Pascal3D import Pascal3D
-from utils.debugger import Debugger
-from utils.hmParser import parseHeatmap
-from utils.horn87 import RotMat, horn87
-from utils.img import Transform
+from starmap.datasets.Pascal3D import Pascal3D
+from starmap.utils.debugger import Debugger
+from starmap.utils.hmParser import parseHeatmap
+from starmap.utils.horn87 import RotMat, horn87
+from starmap.utils.img import Transform
 from scipy.linalg import logm
 import scipy.io as sio
 PI = np.arccos(-1)

@@ -53,6 +53,14 @@ def getModel(opt):
       state_dict = checkpoint['state_dict']
     else:
       state_dict = checkpoint.state_dict()
+
+  if opt.loadModelJIT != '':
+    print("=> loading JIT model '{}'".format(opt.loadModelJIT))
+    checkpoint = torch.jit.load(opt.loadModelJIT)
+    if type(checkpoint) == type({}):
+      state_dict = checkpoint['state_dict']
+    else:
+      state_dict = checkpoint.state_dict()
     
     if 'hg' in opt.arch:
       for i in range(opt.nStack):

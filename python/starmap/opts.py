@@ -23,6 +23,7 @@ class opts(object):
     self.parser.add_argument('-saveAllModels', action = 'store_true', help = '')
     
     self.parser.add_argument('-loadModel', default = '', help = 'Provide full path to a previously trained model')
+    self.parser.add_argument('-loadModelJIT', default = '', help = 'Provide full path to a previously trained JIT model')
     self.parser.add_argument('-arch', default = 'hg', help = '')
     self.parser.add_argument('-nFeats', type = int, default = 256, help = '# features in the hourglass')
     self.parser.add_argument('-nStack', type = int, default = 2, help = '# hourglasses to stack')

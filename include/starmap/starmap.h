@@ -10,7 +10,6 @@
 namespace starmap {
 
 cv::Mat crop(const cv::Mat& img,
-             const cv::Point2i center,
              const int desired_side);
 
  at::Tensor run_starmap_on_img(const std::string starmap_filepath,
