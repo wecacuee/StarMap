@@ -54,10 +54,55 @@ cv::Mat crop(const cv::Mat& img,
     return output_img;
 }
 
-at::Tensor run_starmap_on_img(const std::string starmap_filepath,
-                        const std::string img_filepath,
-                        const int input_res,
-                        const int gpu_id)
+
+cv::Mat nms(const cv::Mat& det, const int size = 3) {
+  gsl_Expects(det.type() == CV_32F);
+  cv::Mat pooled = cv::Mat::zeros(det.size(), det.type());
+  int start = size / 2;
+  for (int i = start; i < det.size[0] - start; ++i) {
+    for (int j = start; i < det.size[1] - start; ++i) {
+      cv::Mat window = det(cv::Range(i-start, i-start+size),
+                           cv::Range(j-start, j-start+size));
+      pooled.at<float>(i, j) = *std::max_element(window.begin<float>(),
+                                                 window.end<float>());
+    }
+  }
+  // Suppress the non-max parts
+  cv::Mat nonmax = pooled != det;
+  pooled.setTo(0, nonmax);
+  return pooled;
+}
+
+
+std::vector<cv::Point> parse_heatmap(cv::Mat & det,
+                      const float thresh = 0.05) {
+  gsl_Expects(det.dims == 3);
+  det.setTo(0, det < thresh);
+  cv::Mat pooled = nms(det);
+  std::vector<cv::Point> pts;
+  cv::findNonZero(pooled > 0, pts);
+  return pts;
+}
+
+// Convert a char/float mat to torch Tensor
+at::Tensor matToTensor(const cv::Mat &image)
+{
+  bool isChar = (image.type() & 0xF) < 2;
+  std::vector<int64_t> dims = {image.rows, image.cols, image.channels()};
+  return torch::from_blob(image.data, dims, isChar ? torch::kChar : torch::kFloat).to(torch::kFloat);
+}
+
+cv::Mat tensorToMat(const at::Tensor &tensor)
+{
+  auto sizes = tensor.sizes();
+  return cv::Mat(sizes[0], sizes[1], CV_32FC(sizes[2]), tensor.data_ptr());
+}
+
+
+cv::Mat run_starmap_on_img(const std::string& starmap_filepath,
+                           const std::string& img_filepath,
+                           const int input_res,
+                           const int gpu_id)
 {
     gsl_Expects(input_res > 0);
 
@@ -78,8 +123,10 @@ at::Tensor run_starmap_on_img(const std::string starmap_filepath,
     }
     std::vector<torch::jit::IValue> inputs;
     inputs.push_back(input);
-    auto output = model.forward(inputs).toTensor();
-    return output;
+    auto heatmap = model.forward(inputs).toTensor();
+    cv::Mat cvout = tensorToMat(heatmap[0]);
+    auto pts = parse_heatmap(cvout);
+    return cvout;
 }
 
 }
