@@ -124,19 +124,18 @@ def NewCrop(img, center, max_side, rot, desired_side, points=np.zeros((0,2)),
   target_center = np.array([[desired_side, desired_side ]]) / 2
   resized_img_center = rect_resized.mean(axis=-2, keepdims=True)
   R = rotmat_2D_from_angle(rot)
-  rect_target = np.int64(np.round(
+  rect_target = (
       (R @ (rect_resized - resized_img_center).T).T
-      + target_center
-  ))
+      + target_center)
   img_center = np.array([[img.shape[1], img.shape[0]]]) / 2
   target_points = (((desired_side / max_side) * R @ (points - img_center).T).T
                    + target_center)
 
   # Find the range of the rectangle
-  mins_target = np.maximum(np.min(rect_target, axis=-2),
-                         [0, 0])
-  maxs_target = np.minimum(np.max(rect_target, axis=-2),
-                         [desired_side, desired_side])
+  mins_target = np.int64(np.ceil(np.maximum(np.min(rect_target, axis=-2),
+                         [0, 0])))
+  maxs_target = np.int64(np.floor(np.minimum(np.max(rect_target, axis=-2),
+                                             [desired_side, desired_side])))
 
   new_img_shape = ((desired_side, desired_side, img.shape[2])
                    if img.ndim > 2

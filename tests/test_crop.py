@@ -21,7 +21,7 @@ def imread_img(img_shape,
 
 
 def _test_crop(img_shape, desired_side=256, rot=0, img_gen=imread_img,
-               new_crop_kw={}):
+               new_crop_kw={}, skip_match=False):
     """
     @param img_shape: (height, width)
     """
@@ -37,7 +37,7 @@ def _test_crop(img_shape, desired_side=256, rot=0, img_gen=imread_img,
         cv2.waitKey(-1)
         LOG.warning("Images did not match with %d pixels" % np.sum(new_img != proposed_img))
         #assert False
-    else:
+    elif not skip_match:
         assert (new_img != proposed_img).sum() / np.prod(new_img.shape) < 0.02
 
 
@@ -76,6 +76,9 @@ def test_crop_tall_big_small_no_rot():
 def test_crop_tall_big_big_no_rot():
     _test_crop((800, 750))
 
+def test_crop_odd_size():
+    _test_crop((213, 304), skip_match=True)
+
 
 if __name__  == '__main__':
     ## Succeeds
@@ -88,3 +91,4 @@ if __name__  == '__main__':
     test_crop_tall_big_big_no_rot()
     test_crop_tall_big_small_no_rot()
     test_crop_tall_big_big_no_rot()
+    test_crop_odd_size()
