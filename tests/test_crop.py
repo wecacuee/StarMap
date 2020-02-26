@@ -38,7 +38,7 @@ def _test_crop(img_shape, desired_side=256, rot=0, img_gen=imread_img,
         LOG.warning("Images did not match with %d pixels" % np.sum(new_img != proposed_img))
         #assert False
     elif not skip_match:
-        assert (new_img != proposed_img).sum() / np.prod(new_img.shape) < 0.02
+        assert ((np.abs(new_img / 255 - proposed_img / 255)).sum() / np.prod(new_img.shape)) < 0.02
 
 
 def test_crop_lena():
@@ -76,8 +76,18 @@ def test_crop_tall_big_small_no_rot():
 def test_crop_tall_big_big_no_rot():
     _test_crop((800, 750))
 
+
 def test_crop_odd_size():
-    _test_crop((213, 304), skip_match=True)
+    _test_crop((213, 304))
+    _test_crop((801, 751))
+    _test_crop((801, 751))
+    _test_crop((801, 101))
+    _test_crop((401, 301))
+    _test_crop((401, 101))
+    _test_crop((201, 101))
+    _test_crop((101, 201))
+    _test_crop((101, 401))
+    _test_crop((301, 401))
 
 
 if __name__  == '__main__':
