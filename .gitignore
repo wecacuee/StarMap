@@ -109,3 +109,6 @@ ENV/
 # mypy
 .mypy_cache/
 *.bak
+
+/src/starmap_model_cpu_no_dropout.onnx
+CMakeLists.txt.user

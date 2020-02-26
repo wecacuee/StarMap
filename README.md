@@ -186,6 +186,15 @@ python main.py -expID Pstarembdep -task starembdep -loadModel ../exp/Pstaremb/mo
  python main.py -expID cls -task cls -arch resnet18 -trainBatch 32 -LR 0.01 -dropLR 20
 ~~~
 
+For example:
+```
+python demo.py -demo ~/dataset/KITTI/2011_09_30/2011_09_30_drive_0027_sync/image_00/data/0000000000.png -model ../../../orcvio_gamma/pytorch_models/starmap/trained_models/no_dropout/model_cpu.pth 
+```
+
+
+We provide example images in `images/`. 
+The results are shown with predicted canonical view (triangle), the predicted 3D keypoints (cross), and the rotated keypoints with the estimated viewpoint (star). 
+
   - Category specific:
 ~~~
  python main.py -expID clsSpec -task cls -arch resnet18 -trainBatch 32 -LR 0.01 -dropLR 20 -specificView
