@@ -124,6 +124,7 @@ CATKIN_DEPENDS message_runtime
 include_directories(
  include
  ${catkin_INCLUDE_DIRS}
+ ${HDF5_INCLUDE_DIRS}
 )
 set(CMAKE_CXX_STANDARD 11)
 
@@ -208,7 +209,9 @@ install(PROGRAMS
 #############
 
 ## Add gtest based cpp test target and link libraries
-catkin_add_gtest(${PROJECT_NAME}-test tests/test_crop.cpp)
+catkin_add_gtest(${PROJECT_NAME}-test
+        tests/test_crop.cpp
+        tests/test_hmparse.cpp)
 target_link_libraries(${PROJECT_NAME}-test ${PROJECT_NAME} gtest_main)
 
 ## Add folders to be run by python nosetests

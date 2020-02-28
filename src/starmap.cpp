@@ -55,12 +55,12 @@ cv::Mat crop(const cv::Mat& img,
 }
 
 
-cv::Mat nms(const cv::Mat& det, const int size = 3) {
+cv::Mat nms(const cv::Mat& det, const int size) {
   gsl_Expects(det.type() == CV_32F);
   cv::Mat pooled = cv::Mat::zeros(det.size(), det.type());
   int start = size / 2;
   for (int i = start; i < det.size[0] - start; ++i) {
-    for (int j = start; i < det.size[1] - start; ++i) {
+    for (int j = start; j < det.size[1] - start; ++j) {
       cv::Mat window = det(cv::Range(i-start, i-start+size),
                            cv::Range(j-start, j-start+size));
       pooled.at<float>(i, j) = *std::max_element(window.begin<float>(),
@@ -74,12 +74,12 @@ cv::Mat nms(const cv::Mat& det, const int size = 3) {
 }
 
 
-std::vector<cv::Point> parse_heatmap(cv::Mat & det,
-                      const float thresh = 0.05) {
-  gsl_Expects(det.dims == 3);
+std::vector<cv::Point2i>
+    parse_heatmap(cv::Mat & det, const float thresh) {
+  gsl_Expects(det.dims == 2);
   det.setTo(0, det < thresh);
   cv::Mat pooled = nms(det);
-  std::vector<cv::Point> pts;
+  std::vector<cv::Point2i> pts;
   cv::findNonZero(pooled > 0, pts);
   return pts;
 }
