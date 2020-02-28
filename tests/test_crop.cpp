@@ -43,26 +43,26 @@ bool _test_crop(const int rows,
 
 
 TEST(CropTest, HandlesFatBigBig) {
-  ASSERT_TRUE(_test_crop(300, 400)) << "Images do not match";
+  ASSERT_TRUE(_test_crop(301, 401)) << "Images do not match";
 }
 
 
 TEST(CropTest, HandlesFatSmallBig) {
-  ASSERT_TRUE(_test_crop(100, 400)) << "Images do not match";
+  ASSERT_TRUE(_test_crop(101, 401)) << "Images do not match";
 }
 
 TEST(CropTest, HandlesFatSmallSmall) {
-  ASSERT_TRUE(_test_crop(100, 200)) << "Images do not match";
+  ASSERT_TRUE(_test_crop(101, 201)) << "Images do not match";
 }
 
 TEST(CropTest, HandlesTallSmallSmall) {
-  ASSERT_TRUE(_test_crop(200, 100)) << "Images do not match";
+  ASSERT_TRUE(_test_crop(201, 101)) << "Images do not match";
 }
 
 TEST(CropTest, HandlesTallBigSmall) {
-  ASSERT_TRUE(_test_crop(400, 100)) << "Images do not match";
+  ASSERT_TRUE(_test_crop(401, 101)) << "Images do not match";
 }
 
 TEST(CropTest, HandlesTallBigBig) {
-  ASSERT_TRUE(_test_crop(400, 300)) << "Images do not match";
+  ASSERT_TRUE(_test_crop(401, 301)) << "Images do not match";
 }
