@@ -107,8 +107,13 @@ at::Tensor matToTensor(const cv::Mat &image)
 
 cv::Mat tensorToMat(const at::Tensor &tensor)
 {
+  gsl_Expects(tensor.ndimension() == 3 || tensor.ndimension() == 2);
   auto sizes = tensor.sizes();
-  return cv::Mat(sizes[0], sizes[1], CV_32FC(sizes[2]), tensor.data_ptr());
+  if (tensor.ndimension() == 3) {
+      return cv::Mat(sizes[0], sizes[1], CV_32FC(sizes[2]), tensor.data_ptr());
+  } else if (tensor.ndimension() == 2) {
+      return cv::Mat(sizes[0], sizes[1], CV_32F, tensor.data_ptr());
+  }
 }
 
 
@@ -144,12 +149,10 @@ std::vector<cv::Point2i> run_starmap_on_img(const std::string& starmap_filepath,
     torch::jit::IValue out = model.forward(inputs);
     auto outele = out.toTuple()->elements();
     auto heatmap = at::squeeze(outele[0].toTensor(), 0); // NCWH -> CWH
-    //auto heatmap2 = at::squeeze(outele[1].toTensor(), 0); // NCWH -> CWH
-    heatmap = at::transpose(heatmap, 0, 2); // CWH -> WHC
-    cv::Mat cvout = tensorToMat(heatmap);
-    cv::Mat cvgray;
-    cv::cvtColor(cvout, cvgray, cv::COLOR_BGR2GRAY);
-    auto pts = parse_heatmap(cvgray);
+    auto heatmap_c1 = heatmap[0]; // CWH -> WH
+    cv::Mat cvout = tensorToMat(heatmap_c1);
+    assert(cvout.type() == CV_32FC1);
+    auto pts = parse_heatmap(cvout);
     return pts;
 }
 
