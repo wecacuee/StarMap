@@ -16,8 +16,9 @@ using namespace std;
 
 /**
  * @brief crop img to a square image with each side as desired side
- * @param img
- * @param desired_side
+ *
+ * @param img            The image to crop
+ * @param desired_side   Desired size of output cropped image
  * @return Converted image
  */
 cv::Mat crop(const cv::Mat& img,
@@ -54,7 +55,12 @@ cv::Mat crop(const cv::Mat& img,
     return output_img;
 }
 
-
+/**
+ * @brief nms
+ * @param det
+ * @param size
+ * @return
+ */
 cv::Mat nms(const cv::Mat& det, const int size) {
   gsl_Expects(det.type() == CV_32F);
   cv::Mat pooled = cv::Mat::zeros(det.size(), det.type());
@@ -73,7 +79,13 @@ cv::Mat nms(const cv::Mat& det, const int size) {
   return pooled;
 }
 
-
+/**
+ * @brief Parse heatmap for points above a threshold
+ *
+ * @param det     The heatmap to parse
+ * @param thresh  Threshold over which points are kept
+ * @return        Vector of points above threshold
+ */
 std::vector<cv::Point2i>
     parse_heatmap(cv::Mat & det, const float thresh) {
   gsl_Expects(det.dims == 2);
@@ -89,7 +101,8 @@ at::Tensor matToTensor(const cv::Mat &image)
 {
   bool isChar = (image.type() & 0xF) < 2;
   std::vector<int64_t> dims = {image.rows, image.cols, image.channels()};
-  return torch::from_blob(image.data, dims, isChar ? torch::kChar : torch::kFloat).to(torch::kFloat);
+  return torch::from_blob(image.data, dims,
+                          isChar ? torch::kChar : torch::kFloat).to(torch::kFloat);
 }
 
 cv::Mat tensorToMat(const at::Tensor &tensor)
@@ -99,7 +112,7 @@ cv::Mat tensorToMat(const at::Tensor &tensor)
 }
 
 
-cv::Mat run_starmap_on_img(const std::string& starmap_filepath,
+std::vector<cv::Point2i> run_starmap_on_img(const std::string& starmap_filepath,
                            const std::string& img_filepath,
                            const int input_res,
                            const int gpu_id)
@@ -107,12 +120,17 @@ cv::Mat run_starmap_on_img(const std::string& starmap_filepath,
     gsl_Expects(input_res > 0);
 
     // img = cv2.imread(opt.demo)
-    const auto img = cv::imread(img_filepath);
+    const auto img = cv::imread(img_filepath, cv::IMREAD_COLOR);
+    assert(img.type() == CV_8UC3);
 
     // img2 = Crop(img, center, scale, input_res) / 256.;
-    cv::Mat img2 = crop(img, input_res) / 256.0;
-    auto input = torch::from_blob(img2.ptr<float>(),
-                                  {1, img2.size[0], img2.size[1], img2.size[2]});
+    cv::Mat img2 = crop(img, input_res);
+    cv::Mat imgfloat;
+    img2.convertTo(imgfloat, CV_32FC3, 1/255.0);
+    assert(imgfloat.type() == CV_32FC3);
+    auto input = matToTensor(imgfloat);
+    input = at::transpose(input, 0, 2); // Make channel the first dimension CWH from WHC
+    input = at::unsqueeze(input, 0); // Make it NCWH
 
     // model = torch.load(opt.loadModel)
     auto model = torch::jit::load(starmap_filepath);
@@ -123,10 +141,16 @@ cv::Mat run_starmap_on_img(const std::string& starmap_filepath,
     }
     std::vector<torch::jit::IValue> inputs;
     inputs.push_back(input);
-    auto heatmap = model.forward(inputs).toTensor();
-    cv::Mat cvout = tensorToMat(heatmap[0]);
-    auto pts = parse_heatmap(cvout);
-    return cvout;
+    torch::jit::IValue out = model.forward(inputs);
+    auto outele = out.toTuple()->elements();
+    auto heatmap = at::squeeze(outele[0].toTensor(), 0); // NCWH -> CWH
+    //auto heatmap2 = at::squeeze(outele[1].toTensor(), 0); // NCWH -> CWH
+    heatmap = at::transpose(heatmap, 0, 2); // CWH -> WHC
+    cv::Mat cvout = tensorToMat(heatmap);
+    cv::Mat cvgray;
+    cv::cvtColor(cvout, cvgray, cv::COLOR_BGR2GRAY);
+    auto pts = parse_heatmap(cvgray);
+    return pts;
 }
 
 }
