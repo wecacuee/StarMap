@@ -1,5 +1,5 @@
 from __future__ import division
-from past.utils import old_div
+from future.utils import old_div
 import torch
 import numpy as np
 import cv2
@@ -147,7 +147,7 @@ def NewCrop(img, center, max_side, rot, desired_side, points=np.zeros((0,2)),
           mins_target[0]:maxs_target[0],
           ...] = resized_img[0:maxs_target[1]-mins_target[1],
                              0:maxs_target[0]-mins_target[0], ...]
-  return ((new_img, target_points)
+  return ((new_img, target_points[:, ::-1])
           if return_points
           else new_img)
 
