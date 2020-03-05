@@ -156,7 +156,7 @@ std::vector<cv::Point2i> run_starmap_on_img(const std::string& starmap_filepath,
 
     auto vis = img2;
     for (const auto& pt: pts) {
-      cv::Point2i pts_swapped(pt.y, pt.x);
+      cv::Point2i pts_swapped(pt.y * 4, pt.x * 4);
       cv::circle(vis, pts_swapped, 2, (255, 255, 255), -1);
     }
     cv::imshow("vis", vis);
