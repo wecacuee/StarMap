@@ -19,7 +19,10 @@ def main():
   opt = opts().parse()
   if opt.loadModel == '':
     opt.loadModel = '../models/Pascal3D-cpu.pth'
-  model = torch.load(opt.loadModel)
+  if opt.loadModel.endswith("-jit.pth"):
+    model = torch.jit.load(opt.loadModel)
+  else:
+    model = torch.load(opt.loadModel)
   img = cv2.imread(opt.demo)
   s = max(img.shape[0], img.shape[1]) * 1.0
   c = np.array([img.shape[1] / 2., img.shape[0] / 2.])
