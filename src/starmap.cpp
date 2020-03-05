@@ -153,6 +153,14 @@ std::vector<cv::Point2i> run_starmap_on_img(const std::string& starmap_filepath,
     cv::Mat cvout = tensorToMat(heatmap_c1);
     assert(cvout.type() == CV_32FC1);
     auto pts = parse_heatmap(cvout);
+
+    auto vis = img2;
+    for (const auto& pt: pts) {
+      cv::Point2i pts_swapped(pt.y, pt.x);
+      cv::circle(vis, pts_swapped, 2, (255, 255, 255), -1);
+    }
+    cv::imshow("vis", vis);
+    cv::waitKey(-1);
     return pts;
 }
 

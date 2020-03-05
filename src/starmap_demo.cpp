@@ -1,7 +1,6 @@
 #include <iostream>
 #include <tuple>
 
-
 #include "torch/script.h"
 #include "boost/program_options.hpp"
 #include "opencv2/opencv.hpp"
@@ -49,7 +48,7 @@ int main(const int argc, char** const argv) {
     if (!cont)
         return 1;
 
-    auto output = starmap::run_starmap_on_img(
+    auto pts = starmap::run_starmap_on_img(
             opt["loadModel"].as<string>(),
             opt["demo"].as<string>(),
             opt["input_res"].as<const int>(),
