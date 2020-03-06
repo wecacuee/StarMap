@@ -53,3 +53,20 @@ TEST(HmParser, parseHeatmap) {
     }
 }
 
+TEST(HmParser, parseHeatmap_car) {
+  cv::FileStorage fs("tests/data/car-hm00.cv2.yaml",
+                     cv::FileStorage::READ);
+  auto hm0 = fs["hm00"].mat();
+  // std::cerr << cv::format(hm0, cv::Formatter::FMT_PYTHON) << "\n";
+  auto pts = starmap::parse_heatmap(hm0);
+
+  // Serialize using opencv
+  cv::FileStorage fs2("tests/data/car-pts.cv2.yaml",
+                     cv::FileStorage::READ);
+  auto expected_pts = fs2["pts"].mat();
+  ASSERT_EQ(expected_pts.size[1], pts.size());
+  for (int i = 0; i < expected_pts.size[1]; ++i) {
+    ASSERT_EQ(expected_pts.at<int>(0, i), pts[i].y) << "Fail y for i = " << i;
+    ASSERT_EQ(expected_pts.at<int>(1, i), pts[i].x) << "Fail x for i = " << i;
+  }
+}

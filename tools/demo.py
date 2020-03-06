@@ -26,7 +26,9 @@ def main():
   img = cv2.imread(opt.demo)
   s = max(img.shape[0], img.shape[1]) * 1.0
   c = np.array([img.shape[1] / 2., img.shape[0] / 2.])
-  img = Crop(img, c, s, 0, ref.inputRes).astype(np.float32).transpose(2, 0, 1) / 256.
+  img_cropped = Crop(img, c, s, 0, ref.inputRes)
+  cv2.imwrite("../tests/data/car-cropped.jpg", img_cropped);
+  img = img_cropped.astype(np.float32).transpose(2, 0, 1) / 256.
   input = torch.from_numpy(img.copy()).float()
   input = input.view(1, input.size(0), input.size(1), input.size(2))
   input_var = torch.autograd.Variable(input).float()
@@ -47,8 +49,12 @@ def main():
   trans = 0.8
   star = (trans * star + (1. - trans) * img).astype(np.uint8)
 
-   
+  f = cv2.FileStorage("../tests/data/car-hm00.cv2.yaml", cv2.FileStorage_WRITE)
+  f.write("hm00", hm[0][0])
+
   ps = parseHeatmap(hm[0], thresh = 0.1)
+  f = cv2.FileStorage("../tests/data/car-pts.cv2.yaml", cv2.FileStorage_WRITE)
+  f.write("pts", np.asarray(ps))
   canonical, pred, color, score = [], [], [], []
   for k in range(len(ps[0])):
     x, y, z = ((hm[0, 1:4, ps[0][k], ps[1][k]] + 0.5) * ref.outputRes).astype(np.int32)
