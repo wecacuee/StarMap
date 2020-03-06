@@ -173,7 +173,7 @@ std::vector<cv::Point2i> run_starmap_on_img(const std::string& starmap_filepath,
     cv::Mat tmp, starvis;
     cv::cvtColor(star, tmp, cv::COLOR_GRAY2BGR);
     cv::resize(tmp, starvis, cv::Size(imgfloat.size[0], imgfloat.size[1]));
-    starvis = starvis * 0.4 + imgfloat * 255 * 0.6;
+    starvis = starvis * 0.5 + imgfloat * 255 * 0.5;
     cv::Mat starvisimg;
     starvis.convertTo(starvisimg, CV_8UC1);
     for (const auto& pt: pts) {
