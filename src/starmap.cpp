@@ -116,12 +116,15 @@ cv::Mat tensorToMat(const at::Tensor &tensor)
   }
 }
 
-cv::Mat model_forward(torch::jit::script::Module& model,
+std::tuple<cv::Mat, cv::Mat, cv::Mat>
+  model_forward(torch::jit::script::Module& model,
                          const cv::Mat& imgfloat)
 {
   gsl_Expects(imgfloat.type() == CV_32FC3);
   auto input = matToTensor(imgfloat);
-  input = at::transpose(input, 0, 2); // Make channel the first dimension CWH from WHC
+  // Make channel the first dimension CWH from WHC
+  input = at::transpose(input, 1, 2); // WHC -> WCH
+  input = at::transpose(input, 0, 1); // WCH -> CWH
   input = at::unsqueeze(input, 0); // Make it NCWH
   input.to((*model.parameters().begin()).device());
   std::vector<torch::jit::IValue> inputs;
@@ -129,10 +132,13 @@ cv::Mat model_forward(torch::jit::script::Module& model,
   torch::jit::IValue out = model.forward(inputs);
   auto outele = out.toTuple()->elements();
   auto heatmap = outele[0].toTensor();
-  auto heatmap_c1 = heatmap[0][0]; // CWH -> WH
-  cv::Mat cvout = tensorToMat(heatmap_c1);
+  cv::Mat cvout = tensorToMat(heatmap[0][0]);
+  cv::Mat xyz = tensorToMat(at::slice(heatmap[0], 1, 4) * imgfloat.size[0]);
+  cv::Mat depth = tensorToMat(heatmap[0][4] * imgfloat.size[0]);
   gsl_Ensures(cvout.type() == CV_32FC1);
-  return cvout;
+  // gsl_Ensures(xyz.type() == CV_32FC3);
+  gsl_Ensures(depth.type() == CV_32FC1);
+  return std::make_tuple(cvout, xyz, depth);
 }
 
 
@@ -157,15 +163,29 @@ std::vector<cv::Point2i> run_starmap_on_img(const std::string& starmap_filepath,
       auto device = torch::Device(torch::DeviceType::CUDA, gpu_id);
       model.to(device);
     }
-    auto cvout = model_forward(model, imgfloat);
-    auto pts = parse_heatmap(cvout);
+    cv::Mat hm00, xyz, depth;
+    std::tie(hm00, xyz, depth)  = model_forward(model, imgfloat);
+    auto pts = parse_heatmap(hm00, 0.1);
+    std::cerr << "pts.size : " << pts.size() << "\n";
 
     auto vis = img2;
+    cv::Mat star = hm00 * 255;
+    cv::Mat tmp, starvis;
+    cv::cvtColor(star, tmp, cv::COLOR_GRAY2BGR);
+    cv::resize(tmp, starvis, cv::Size(imgfloat.size[0], imgfloat.size[1]));
+    starvis = starvis * 0.4 + imgfloat * 255 * 0.6;
+    cv::Mat starvisimg;
+    starvis.convertTo(starvisimg, CV_8UC1);
     for (const auto& pt: pts) {
-      cv::Point2i pts_swapped(pt.y * 4, pt.x * 4);
-      cv::circle(vis, pts_swapped, 2, (255, 255, 255), -1);
+      cv::Point2i pt4(pt.x * 4, pt.y * 4);
+      cv::circle(vis, pt4, 4, cv::Scalar(255, 255, 255), -1);
+      cv::circle(vis, pt4, 2, cv::Scalar(xyz.at<cv::Scalar>(pt.y, pt.x)[0],
+                                         xyz.at<cv::Scalar>(pt.y, pt.x)[1],
+                                         xyz.at<cv::Scalar>(pt.y, pt.x)[2]),
+                 -1);
     }
     cv::imshow("vis", vis);
+    cv::imshow("starvis", starvisimg);
     cv::waitKey(-1);
     return pts;
 }

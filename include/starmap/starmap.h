@@ -19,7 +19,8 @@ std::vector<cv::Point2i> run_starmap_on_img(const std::string& starmap_filepath,
 
 cv::Mat nms(const cv::Mat& det, const int size = 3);
 
-cv::Mat model_forward(torch::jit::script::Module& model,
+std::tuple<cv::Mat, cv::Mat, cv::Mat>
+  model_forward(torch::jit::script::Module& model,
                       const cv::Mat& imgfloat);
 
 std::vector<cv::Point2i> parse_heatmap(cv::Mat & det, const float thresh = 0.05);

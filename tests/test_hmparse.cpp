@@ -69,13 +69,14 @@ TEST(HmParser, model_forward_car) {
   cv::Mat imgfloat;
   inimg.convertTo(imgfloat, CV_32FC3, 1/255.0);
   auto model = torch::jit::load(starmap_filepath);
-  auto hm00 = starmap::model_forward(model, imgfloat);
+  cv::Mat hm00, xyz, depth;
+  std::tie(hm00, xyz, depth) = starmap::model_forward(model, imgfloat);
   auto expected_hm00 = fs["hm00"].mat();
-  ASSERT_TRUE(hm00.size == expected_hm00.size);
+  ASSERT_EQ(hm00.size, expected_hm00.size);
   cv::Mat diff;
   cv::absdiff(hm00, expected_hm00, diff);
   double diffval = cv::sum(diff)[0];
-  double maxdiff = 255 * expected_hm00.size[0] * expected_hm00.size[1];
+  double maxdiff = expected_hm00.size[0] * expected_hm00.size[1];
   ASSERT_TRUE( diffval < 0.02 * maxdiff) <<
     "diffval: " << diffval << " < exp: " << 0.02 * maxdiff;
 }
