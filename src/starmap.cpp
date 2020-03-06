@@ -116,6 +116,25 @@ cv::Mat tensorToMat(const at::Tensor &tensor)
   }
 }
 
+cv::Mat model_forward(torch::jit::script::Module& model,
+                         const cv::Mat& imgfloat)
+{
+  gsl_Expects(imgfloat.type() == CV_32FC3);
+  auto input = matToTensor(imgfloat);
+  input = at::transpose(input, 0, 2); // Make channel the first dimension CWH from WHC
+  input = at::unsqueeze(input, 0); // Make it NCWH
+  input.to((*model.parameters().begin()).device());
+  std::vector<torch::jit::IValue> inputs;
+  inputs.push_back(input);
+  torch::jit::IValue out = model.forward(inputs);
+  auto outele = out.toTuple()->elements();
+  auto heatmap = outele[0].toTensor();
+  auto heatmap_c1 = heatmap[0][0]; // CWH -> WH
+  cv::Mat cvout = tensorToMat(heatmap_c1);
+  gsl_Ensures(cvout.type() == CV_32FC1);
+  return cvout;
+}
+
 
 std::vector<cv::Point2i> run_starmap_on_img(const std::string& starmap_filepath,
                            const std::string& img_filepath,
@@ -132,26 +151,13 @@ std::vector<cv::Point2i> run_starmap_on_img(const std::string& starmap_filepath,
     cv::Mat img2 = crop(img, input_res);
     cv::Mat imgfloat;
     img2.convertTo(imgfloat, CV_32FC3, 1/255.0);
-    assert(imgfloat.type() == CV_32FC3);
-    auto input = matToTensor(imgfloat);
-    input = at::transpose(input, 0, 2); // Make channel the first dimension CWH from WHC
-    input = at::unsqueeze(input, 0); // Make it NCWH
-
     // model = torch.load(opt.loadModel)
     auto model = torch::jit::load(starmap_filepath);
     if (gpu_id >= 0) {
-        auto device = torch::Device(torch::DeviceType::CUDA, gpu_id);
-        model.to(device);
-        input.to(device);
+      auto device = torch::Device(torch::DeviceType::CUDA, gpu_id);
+      model.to(device);
     }
-    std::vector<torch::jit::IValue> inputs;
-    inputs.push_back(input);
-    torch::jit::IValue out = model.forward(inputs);
-    auto outele = out.toTuple()->elements();
-    auto heatmap = at::squeeze(outele[0].toTensor(), 0); // NCWH -> CWH
-    auto heatmap_c1 = heatmap[0]; // CWH -> WH
-    cv::Mat cvout = tensorToMat(heatmap_c1);
-    assert(cvout.type() == CV_32FC1);
+    auto cvout = model_forward(model, imgfloat);
     auto pts = parse_heatmap(cvout);
 
     auto vis = img2;

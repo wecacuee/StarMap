@@ -15,7 +15,7 @@ find_package(catkin REQUIRED COMPONENTS
     )
 
 ## System dependencies are found with CMake's conventions
-find_package(Boost REQUIRED COMPONENTS system program_options)
+find_package(Boost REQUIRED COMPONENTS system program_options filesystem)
 find_package(Torch REQUIRED)
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${TORCH_CXX_FLAGS}")
 find_package(OpenCV 3.4 REQUIRED)
@@ -215,7 +215,10 @@ install(PROGRAMS
 catkin_add_gtest(${PROJECT_NAME}-test
         tests/test_crop.cpp
         tests/test_hmparse.cpp)
-target_link_libraries(${PROJECT_NAME}-test ${PROJECT_NAME} gtest_main)
+      target_link_libraries(${PROJECT_NAME}-test ${PROJECT_NAME}
+        "${Boost_LIBRARIES}"
+        "${OpenCV_LIBRARIES}"
+        gtest_main)
 
 ## Add folders to be run by python nosetests
 # catkin_add_nosetests(test)

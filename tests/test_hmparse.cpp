@@ -4,11 +4,13 @@
 #include "starmap/starmap.h" // starmap::*
 #include "torch/torch.h" // torch::*
 #include "torch/script.h" // torch::*
+#include "boost/filesystem.hpp" // boost::filesystem::*
 
 #include "opencv2/opencv.hpp" // cv::*
 #include "opencv2/imgcodecs.hpp" // cv::imread, cv::imwrite
 
 namespace tjs = torch::jit::script;
+namespace bfs = boost::filesystem;
 
 class FileNotFoundError : std::runtime_error {
 public:
@@ -53,16 +55,41 @@ TEST(HmParser, parseHeatmap) {
     }
 }
 
+TEST(HmParser, model_forward_car) {
+  const std::string starmap_filepath("models/model_cpu-jit.pth");
+  if (! bfs::exists(starmap_filepath))
+    return;
+
+  const std::string croppedimg("tests/data/car-cropped.jpg");
+  const cv::FileStorage fs("tests/data/car-hm00.cv2.yaml",
+                           cv::FileStorage::READ);
+  cv::Mat inimg = cv::imread(croppedimg, cv::IMREAD_COLOR);
+  if (inimg.data == nullptr)
+    throw new FileNotFoundError(croppedimg);
+  cv::Mat imgfloat;
+  inimg.convertTo(imgfloat, CV_32FC3, 1/255.0);
+  auto model = torch::jit::load(starmap_filepath);
+  auto hm00 = starmap::model_forward(model, imgfloat);
+  auto expected_hm00 = fs["hm00"].mat();
+  ASSERT_TRUE(hm00.size == expected_hm00.size);
+  cv::Mat diff;
+  cv::absdiff(hm00, expected_hm00, diff);
+  double diffval = cv::sum(diff)[0];
+  double maxdiff = 255 * expected_hm00.size[0] * expected_hm00.size[1];
+  ASSERT_TRUE( diffval < 0.02 * maxdiff) <<
+    "diffval: " << diffval << " < exp: " << 0.02 * maxdiff;
+}
+
 TEST(HmParser, parseHeatmap_car) {
   cv::FileStorage fs("tests/data/car-hm00.cv2.yaml",
                      cv::FileStorage::READ);
+  cv::FileStorage fs2("tests/data/car-pts.cv2.yaml",
+                      cv::FileStorage::READ);
   auto hm0 = fs["hm00"].mat();
   // std::cerr << cv::format(hm0, cv::Formatter::FMT_PYTHON) << "\n";
   auto pts = starmap::parse_heatmap(hm0);
 
   // Serialize using opencv
-  cv::FileStorage fs2("tests/data/car-pts.cv2.yaml",
-                     cv::FileStorage::READ);
   auto expected_pts = fs2["pts"].mat();
   ASSERT_EQ(expected_pts.size[1], pts.size());
   for (int i = 0; i < expected_pts.size[1]; ++i) {
