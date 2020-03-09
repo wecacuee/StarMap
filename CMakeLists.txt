@@ -12,6 +12,9 @@ find_package(catkin REQUIRED COMPONENTS
     rospy
     std_msgs
     message_generation
+    pluginlib
+    nodelet
+    message_filters
     )
 
 ## System dependencies are found with CMake's conventions
@@ -134,7 +137,9 @@ set(CMAKE_CXX_STANDARD 11)
 ## Declare a C++ library
 add_library(${PROJECT_NAME}
         src/starmap.cpp
+        src/starmap_nodelet.cpp
 )
+set_target_properties(${PROJECT_NAME} PROPERTIES CXX_STANDARD 11)
 target_link_libraries(${PROJECT_NAME}
         "${OpenCV_LIBRARIES}"
         gsl::gsl-lite
@@ -150,12 +155,14 @@ target_link_libraries(${PROJECT_NAME}
 ## With catkin_make all packages are built within a single CMake context
 ## The recommended prefix ensures that target names across packages don't collide
 add_executable(${PROJECT_NAME}_demo src/starmap_demo.cpp)
+add_executable(${PROJECT_NAME}_node src/starmap_node.cpp)
 
 ## Rename C++ executable without prefix
 ## The above recommended prefix causes long target names, the following renames the
 ## target back to the shorter version for ease of user use
 ## e.g. "rosrun someones_pkg node" instead of "rosrun someones_pkg someones_pkg_node"
 set_target_properties(${PROJECT_NAME}_demo PROPERTIES CXX_STANDARD 11)
+set_target_properties(${PROJECT_NAME}_node PROPERTIES CXX_STANDARD 11)
 
 
 ## Add cmake target dependencies of the executable
@@ -170,6 +177,14 @@ target_link_libraries(${PROJECT_NAME}_demo
    "${Boost_LIBRARIES}"
    "${OpenCV_LIBRARIES}"
 )
+
+target_link_libraries(${PROJECT_NAME}_node
+  ${PROJECT_NAME}
+  ${catkin_LIBRARIES}
+  "${TORCH_LIBRARIES}"
+  "${Boost_LIBRARIES}"
+  "${OpenCV_LIBRARIES}"
+  )
 
 
 #############
