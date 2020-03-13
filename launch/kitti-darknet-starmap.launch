@@ -1,0 +1,12 @@
+<launch>
+  <node pkg="img_publisher" type="publisher.py" name="img_publisher_0" />
+  <group>
+    <include file="$(find darknet_ros)/launch/darknet_ros.launch" >
+      <arg name="image" value="/image_raw_0" />
+      <arg name="bounding_boxes" value="/darknet_ros/bounding_boxes_0" />
+    </include>
+  </group>
+  <!--node pkg="nodelet" type="nodelet" name="manager" args="manager" /-->
+  <!-- node pkg="nodelet" type="nodelet" name="starmap" args="standalone starmap/Starmap" output="screen"/-->
+  <node pkg="starmap" type="starmap_node" name="starmap" />
+</launch>

@@ -230,10 +230,11 @@ install(PROGRAMS
 catkin_add_gtest(${PROJECT_NAME}-test
         tests/test_crop.cpp
         tests/test_hmparse.cpp)
-      target_link_libraries(${PROJECT_NAME}-test ${PROJECT_NAME}
-        "${Boost_LIBRARIES}"
-        "${OpenCV_LIBRARIES}"
-        gtest_main)
+target_link_libraries(${PROJECT_NAME}-test ${PROJECT_NAME}
+  ${catkin_LIBRARIES}
+  "${Boost_LIBRARIES}"
+  "${OpenCV_LIBRARIES}"
+  gtest_main)
 
 ## Add folders to be run by python nosetests
 # catkin_add_nosetests(test)
