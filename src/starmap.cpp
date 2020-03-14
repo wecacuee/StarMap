@@ -20,7 +20,8 @@ double scale_for_crop(const Point2i& img_size,
                       const int desired_side)
 {
   int max_side = max(img_size.x, img_size.y);
-  double scale_factor = desired_side / max_side;
+  double scale_factor = static_cast<double>(desired_side) / static_cast<double>(max_side);
+  gsl_Ensures(scale_factor > 0);
   return scale_factor;
 }
 
@@ -55,7 +56,7 @@ Mat crop(const Mat& img,
     constexpr int D = 2;
     gsl_Expects(desired_side > 0);
     gsl_Expects(img.dims >= 2 && img.dims <= 3);
-    int scale_factor = scale_for_crop({img.size[1], img.size[0]}, desired_side);
+    double scale_factor = scale_for_crop({img.size[1], img.size[0]}, desired_side);
     // scale the image first
     Mat resized_img;
     resize(img, resized_img,
@@ -73,7 +74,7 @@ Mat crop(const Mat& img,
     Point2f target_center( desired_side / 2, desired_side / 2);
     Point2f resized_img_center( resized_img.size[1] / 2, resized_img.size[0] / 2);
     auto translate = target_center - resized_img_center ;
-    auto rect_target = (rect_resized - translate);
+    auto rect_target = (rect_resized + translate);
 
     // img.size[2] might not be accessible
     const int size[3] = {desired_side, desired_side, img.size[2]};
