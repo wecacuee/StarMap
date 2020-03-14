@@ -15,6 +15,7 @@ find_package(catkin REQUIRED COMPONENTS
     pluginlib
     nodelet
     message_filters
+    cv_bridge
     )
 
 ## System dependencies are found with CMake's conventions

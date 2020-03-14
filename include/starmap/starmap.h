@@ -12,10 +12,18 @@ namespace starmap {
 cv::Mat crop(const cv::Mat& img,
              const int desired_side);
 
-std::vector<cv::Point2i> run_starmap_on_img(const std::string& starmap_filepath,
-                           const std::string& img_filepath,
-                           const int input_res,
-                           const int gpu_id);
+typedef std::vector<cv::Point2i> Points;
+Points run_starmap_on_img(const std::string& starmap_filepath,
+                          const std::string& img_filepath,
+                          const int input_res,
+                          const int gpu_id,
+                          const bool visualize = true);
+
+std::tuple<Points, std::vector<cv::Vec3f>, std::vector<float>, cv::Mat>
+ find_semantic_keypoints_prob_depth(torch::jit::script::Module& model,
+                                    const cv::Mat& img,
+                                    const int input_res,
+                                    const bool visualize);
 
 cv::Mat nms(const cv::Mat& det, const int size = 3);
 

@@ -2,6 +2,7 @@
 #include <tuple> // tuple, tie
 #include <cmath> // floor
 #include <algorithm> // max
+#include <boost/range/counting_range.hpp>
 
 #include "starmap/starmap.h" // starmap
 #include "opencv2/opencv.hpp" // cv::*
@@ -12,6 +13,33 @@
 namespace starmap {
 
 using namespace std;
+using namespace cv;
+
+
+double scale_for_crop(const Point2i& img_size,
+                      const int desired_side)
+{
+  int max_side = max(img_size.x, img_size.y);
+  double scale_factor = desired_side / max_side;
+  return scale_factor;
+}
+
+
+Points convert_to_precrop(const Points& keypoints,
+                          const Point2i& pre_crop_size,
+                          const int desired_side,
+                          const double addnl_scale_factor )
+{
+  Points pre_crop_kp_vec;
+  Point2i curr_center(desired_side, desired_side);
+  double scale_factor = scale_for_crop(pre_crop_size, desired_side);
+  for (auto& kp: keypoints) {
+    Point2i pre_crop_kp = (kp * addnl_scale_factor - curr_center) * scale_factor
+      + pre_crop_size;
+    pre_crop_kp_vec.push_back(pre_crop_kp);
+  }
+  return pre_crop_kp_vec;
+}
 
 
 /**
@@ -21,36 +49,37 @@ using namespace std;
  * @param desired_side   Desired size of output cropped image
  * @return Converted image
  */
-cv::Mat crop(const cv::Mat& img,
+Mat crop(const Mat& img,
              const int desired_side)
 {
     constexpr int D = 2;
     gsl_Expects(desired_side > 0);
     gsl_Expects(img.dims >= 2 && img.dims <= 3);
-    int max_side = max(img.size[0], img.size[1]);
+    int scale_factor = scale_for_crop({img.size[1], img.size[0]}, desired_side);
     // scale the image first
-    cv::Mat resized_img;
-    cv::resize(img, resized_img,
-               cv::Size((img.size[1] * desired_side / max_side),
-                        (img.size[0] * desired_side / max_side)));
+    Mat resized_img;
+    resize(img, resized_img,
+               Size((img.size[1] * scale_factor),
+                    (img.size[0] * scale_factor)));
 
     // Cropping begins here
     // The image rectangle clockwise
-    cv::Rect2f rect_resized(0, 0, resized_img.size[1], resized_img.size[0]);
+    Rect2f rect_resized(0, 0, resized_img.size[1], resized_img.size[0]);
     auto resized_max_side = max(resized_img.size[0], resized_img.size[1]);
 
 
     // Project the rectangle from source image to target image
     // TODO account for rotation
-    cv::Point2f target_center( desired_side / 2, desired_side / 2);
-    cv::Point2f resized_img_center( resized_img.size[1] / 2, resized_img.size[0] / 2);
-    auto rect_target = (rect_resized - resized_img_center) + target_center;
+    Point2f target_center( desired_side / 2, desired_side / 2);
+    Point2f resized_img_center( resized_img.size[1] / 2, resized_img.size[0] / 2);
+    auto translate = target_center - resized_img_center ;
+    auto rect_target = (rect_resized - translate);
 
     // img.size[2] might not be accessible
     const int size[3] = {desired_side, desired_side, img.size[2]};
-    cv::Mat output_img = cv::Mat::zeros(img.dims, size, img.type());
-    cv::Mat output_roi(output_img, rect_target);
-    cv::Mat source_roi = resized_img(cv::Rect(0, 0, rect_target.width, rect_target.height));
+    Mat output_img = Mat::zeros(img.dims, size, img.type());
+    Mat output_roi(output_img, rect_target);
+    Mat source_roi = resized_img(Rect(0, 0, rect_target.width, rect_target.height));
     source_roi.copyTo(output_roi);
     return output_img;
 }
@@ -61,20 +90,20 @@ cv::Mat crop(const cv::Mat& img,
  * @param size
  * @return
  */
-cv::Mat nms(const cv::Mat& det, const int size) {
+Mat nms(const Mat& det, const int size) {
   gsl_Expects(det.type() == CV_32F);
-  cv::Mat pooled = cv::Mat::zeros(det.size(), det.type());
+  Mat pooled = Mat::zeros(det.size(), det.type());
   int start = size / 2;
   for (int i = start; i < det.size[0] - start; ++i) {
     for (int j = start; j < det.size[1] - start; ++j) {
-      cv::Mat window = det(cv::Range(i-start, i-start+size),
-                           cv::Range(j-start, j-start+size));
-      pooled.at<float>(i, j) = *std::max_element(window.begin<float>(),
+      Mat window = det(Range(i-start, i-start+size),
+                           Range(j-start, j-start+size));
+      pooled.at<float>(i, j) = *max_element(window.begin<float>(),
                                                  window.end<float>());
     }
   }
   // Suppress the non-max parts
-  cv::Mat nonmax = pooled != det;
+  Mat nonmax = pooled != det;
   pooled.setTo(0, nonmax);
   return pooled;
 }
@@ -86,39 +115,39 @@ cv::Mat nms(const cv::Mat& det, const int size) {
  * @param thresh  Threshold over which points are kept
  * @return        Vector of points above threshold
  */
-std::vector<cv::Point2i>
-    parse_heatmap(cv::Mat & det, const float thresh) {
+vector<Point2i>
+    parse_heatmap(Mat & det, const float thresh) {
   gsl_Expects(det.dims == 2);
   det.setTo(0, det < thresh);
-  cv::Mat pooled = nms(det);
-  std::vector<cv::Point2i> pts;
-  cv::findNonZero(pooled > 0, pts);
+  Mat pooled = nms(det);
+  vector<Point2i> pts;
+  findNonZero(pooled > 0, pts);
   return pts;
 }
 
 // Convert a char/float mat to torch Tensor
-at::Tensor matToTensor(const cv::Mat &image)
+at::Tensor matToTensor(const Mat &image)
 {
   bool isChar = (image.type() & 0xF) < 2;
-  std::vector<int64_t> dims = {image.rows, image.cols, image.channels()};
+  vector<int64_t> dims = {image.rows, image.cols, image.channels()};
   return torch::from_blob(image.data, dims,
                           isChar ? torch::kChar : torch::kFloat).to(torch::kFloat);
 }
 
-cv::Mat tensorToMat(const at::Tensor &tensor)
+Mat tensorToMat(const at::Tensor &tensor)
 {
   gsl_Expects(tensor.ndimension() == 3 || tensor.ndimension() == 2);
   auto sizes = tensor.sizes();
   if (tensor.ndimension() == 3) {
-      return cv::Mat(sizes[0], sizes[1], CV_32FC(sizes[2]), tensor.data_ptr());
+      return Mat(sizes[0], sizes[1], CV_32FC(sizes[2]), tensor.data_ptr());
   } else if (tensor.ndimension() == 2) {
-      return cv::Mat(sizes[0], sizes[1], CV_32F, tensor.data_ptr());
+      return Mat(sizes[0], sizes[1], CV_32F, tensor.data_ptr());
   }
 }
 
-std::tuple<cv::Mat, cv::Mat, cv::Mat>
+tuple<Mat, Mat, Mat>
   model_forward(torch::jit::script::Module& model,
-                         const cv::Mat& imgfloat)
+                         const Mat& imgfloat)
 {
   gsl_Expects(imgfloat.type() == CV_32FC3);
   auto input = matToTensor(imgfloat);
@@ -127,66 +156,100 @@ std::tuple<cv::Mat, cv::Mat, cv::Mat>
   input = at::transpose(input, 0, 1); // WCH -> CWH
   input = at::unsqueeze(input, 0); // Make it NCWH
   input.to((*model.parameters().begin()).device());
-  std::vector<torch::jit::IValue> inputs;
+  vector<torch::jit::IValue> inputs;
   inputs.push_back(input);
   torch::jit::IValue out = model.forward(inputs);
   auto outele = out.toTuple()->elements();
   auto heatmap = outele[0].toTensor();
-  cv::Mat cvout = tensorToMat(heatmap[0][0]);
-  cv::Mat xyz = tensorToMat(at::slice(heatmap[0], 1, 4) * imgfloat.size[0]);
-  cv::Mat depth = tensorToMat(heatmap[0][4] * imgfloat.size[0]);
+  Mat cvout = tensorToMat(heatmap[0][0]);
+  Mat xyz = tensorToMat(at::slice(heatmap[0], 1, 4) * imgfloat.size[0]);
+  Mat depth = tensorToMat(heatmap[0][4] * imgfloat.size[0]);
   gsl_Ensures(cvout.type() == CV_32FC1);
-  // gsl_Ensures(xyz.type() == CV_32FC3);
+  gsl_Ensures(xyz.type() == CV_32FC3);
   gsl_Ensures(depth.type() == CV_32FC1);
-  return std::make_tuple(cvout, xyz, depth);
+  return make_tuple(cvout, xyz, depth);
 }
 
 
-std::vector<cv::Point2i> run_starmap_on_img(const std::string& starmap_filepath,
-                           const std::string& img_filepath,
-                           const int input_res,
-                           const int gpu_id)
+tuple<Points, vector<Vec3f>, vector<float>, Mat>
+   find_semantic_keypoints_prob_depth(torch::jit::script::Module& model,
+                                      const Mat& img,
+                                      const int input_res,
+                                      const bool visualize)
+{
+  // img2 = Crop(img, center, scale, input_res) / 256.;
+  gsl_Expects(img.type() == CV_32FC3);
+  Mat img_cropped = crop(img, input_res);
+
+  Mat hm00, xyz, depth;
+  tie(hm00, xyz, depth)  = model_forward(model, img_cropped);
+  auto pts = parse_heatmap(hm00, 0.1);
+  vector<Vec3f> xyz_list;
+  vector<float> depth_list;
+  for (auto& pt: pts) {
+    Scalar xyz_at = xyz.at<Scalar>(pt.y, pt.x);
+    xyz_list.emplace_back(xyz_at[0], xyz_at[1], xyz_at[2]);
+    depth_list.push_back(depth.at<float>(pt.y, pt.x));
+  }
+
+  auto pts_old_kp = convert_to_precrop(pts, {img.size[1], img.size[0]}, input_res,
+                                       /*addnl_scale_factor=*/4);
+
+  Mat hm00_resized;
+  resize(hm00, hm00_resized, Size(img_cropped.size[0], img_cropped.size[1]));
+  return make_tuple(pts, xyz_list, depth_list, hm00_resized);
+}
+
+
+vector<Point2i> run_starmap_on_img(const string& starmap_filepath,
+                                            const string& img_filepath,
+                                            const int input_res,
+                                            const int gpu_id,
+                                            const bool visualize)
 {
     gsl_Expects(input_res > 0);
 
     // img = cv2.imread(opt.demo)
-    const auto img = cv::imread(img_filepath, cv::IMREAD_COLOR);
+    const auto img = imread(img_filepath, IMREAD_COLOR);
     assert(img.type() == CV_8UC3);
+    Mat imgfloat;
+    img.convertTo(imgfloat, CV_32FC3, 1/255.0);
 
-    // img2 = Crop(img, center, scale, input_res) / 256.;
-    cv::Mat img2 = crop(img, input_res);
-    cv::Mat imgfloat;
-    img2.convertTo(imgfloat, CV_32FC3, 1/255.0);
     // model = torch.load(opt.loadModel)
     auto model = torch::jit::load(starmap_filepath);
     if (gpu_id >= 0) {
       auto device = torch::Device(torch::DeviceType::CUDA, gpu_id);
       model.to(device);
     }
-    cv::Mat hm00, xyz, depth;
-    std::tie(hm00, xyz, depth)  = model_forward(model, imgfloat);
-    auto pts = parse_heatmap(hm00, 0.1);
-    std::cerr << "pts.size : " << pts.size() << "\n";
 
-    auto vis = img2;
-    cv::Mat star = hm00 * 255;
-    cv::Mat tmp, starvis;
-    cv::cvtColor(star, tmp, cv::COLOR_GRAY2BGR);
-    cv::resize(tmp, starvis, cv::Size(imgfloat.size[0], imgfloat.size[1]));
-    starvis = starvis * 0.5 + imgfloat * 255 * 0.5;
-    cv::Mat starvisimg;
-    starvis.convertTo(starvisimg, CV_8UC1);
-    for (const auto& pt: pts) {
-      cv::Point2i pt4(pt.x * 4, pt.y * 4);
-      cv::circle(vis, pt4, 4, cv::Scalar(255, 255, 255), -1);
-      cv::circle(vis, pt4, 2, cv::Scalar(xyz.at<cv::Scalar>(pt.y, pt.x)[0],
-                                         xyz.at<cv::Scalar>(pt.y, pt.x)[1],
-                                         xyz.at<cv::Scalar>(pt.y, pt.x)[2]),
-                 -1);
+    Points pts;
+    vector<Vec3f> xyz_list;
+    vector<float> depth_list;
+    Mat hm00;
+    tie(pts, xyz_list, depth_list, hm00) =
+      find_semantic_keypoints_prob_depth(model, imgfloat, input_res, visualize);
+
+    if (visualize) {
+      auto vis = img;
+      Mat star = hm00 * 255;
+      Mat starvis;
+      cvtColor(star, starvis, COLOR_GRAY2BGR);
+      starvis = starvis * 0.5 + imgfloat * 255 * 0.5;
+      Mat starvisimg;
+      starvis.convertTo(starvisimg, CV_8UC1);
+      Point2i pt4;
+      Vec3f xyz;
+      for (int i: boost::counting_range<size_t>(0, pts.size())) {
+        auto& pt4 = pts[i];
+        auto& xyz = xyz_list[i];
+        circle(vis, pt4, 4, Scalar(255, 255, 255), -1);
+        circle(vis, pt4, 2, Scalar(xyz[0], xyz[1], xyz[2]), -1);
+      }
+      imshow("vis", vis);
+      imshow("starvis", starvisimg);
+      waitKey(-1);
     }
-    cv::imshow("vis", vis);
-    cv::imshow("starvis", starvisimg);
-    cv::waitKey(-1);
+
     return pts;
 }
 
