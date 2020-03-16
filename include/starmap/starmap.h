@@ -19,7 +19,7 @@ Points run_starmap_on_img(const std::string& starmap_filepath,
                           const int gpu_id,
                           const bool visualize = true);
 
-std::tuple<Points, std::vector<cv::Vec3f>, std::vector<float>, cv::Mat>
+std::tuple<Points, std::vector<cv::Vec3f>, std::vector<float>>
  find_semantic_keypoints_prob_depth(torch::jit::script::Module& model,
                                     const cv::Mat& img,
                                     const int input_res,

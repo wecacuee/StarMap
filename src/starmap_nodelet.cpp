@@ -18,12 +18,15 @@
 #include <cv_bridge/cv_bridge.h>
 #include <kp_detector/KeypointsList.h>
 #include "starmap/starmap.h"
+#include "boost/filesystem.hpp"
+
+using namespace std;
+using cv::Mat;
+using cv::Vec3f;
+namespace bfs = boost::filesystem;
 
 namespace starmap
 {
-  using namespace std;
-  using cv::Mat;
-  using cv::Vec3f;
 
   template<typename T, typename... Args>
   std::unique_ptr<T> make_unique(Args&&... args) {
@@ -37,25 +40,29 @@ namespace starmap
     Starmap() {}
 
   private:
-  virtual void onInit(){
+  virtual void onInit() {
+    NODELET_WARN("Initializing ");
     namespace sph = std::placeholders; // for _1, _2, ...
     std::string image_topic, bbox_topic, keypoint_topic, starmap_model_path;
     int gpu_id;
     auto nh = getNodeHandle();
     auto private_nh = getPrivateNodeHandle();
-    if ( ! nh.param<std::string>("image_topic", image_topic, "image") )
-      throw std::runtime_error("Need image_topic");
-    if ( ! nh.param<std::string>("bbox_topic", bbox_topic, "bounding_boxes") )
-      throw std::runtime_error("Need bbox_topic");
-    if ( ! nh.param<std::string>("keypoint_topic", keypoint_topic, "keypoints") )
-      throw std::runtime_error("Need keypoint_topic");
-    if ( ! nh.param<std::string>("starmap_model_path", starmap_model_path,
-                                 "models/model_cpu-jit.pth") )
-      throw std::runtime_error("Need starmap_model_path");
-    if ( ! nh.param<int>("gpu_id", gpu_id, -1) )
-      throw std::runtime_error("Need gpu_id");
-    timer_ = nh.createTimer(ros::Duration(1.0),
-                            std::bind(& Starmap::timerCb, this, sph::_1));
+    NODELET_WARN("Got node handles");
+    if ( ! private_nh.getParam("starmap_model_path", starmap_model_path) ) {
+      NODELET_FATAL("starmap_model_path is required");
+      throw std::runtime_error("starmap_model_path is required");
+    }
+    if ( ! bfs::exists(starmap_model_path) ) {
+      NODELET_FATAL("starmap_model_path '%s' does not exists", starmap_model_path.c_str());
+      throw std::runtime_error("starmap_model_path does not exists");
+    }
+    private_nh.param<std::string>("image_topic", image_topic, "image");
+    private_nh.param<std::string>("bbox_topic", bbox_topic, "bounding_boxes");
+    private_nh.param<std::string>("keypoint_topic", keypoint_topic, "keypoints");
+    private_nh.param<int>("gpu_id", gpu_id, -1);
+    //timer_ = nh.createTimer(ros::Duration(1.0),
+    //                        std::bind(& Starmap::timerCb, this, sph::_1));
+    NODELET_WARN("Subscribing to %s", image_topic.c_str());
     image_sub_ = make_unique<message_filters::Subscriber<sensor_msgs::Image>>(nh, image_topic, 1);
     bbox_sub_ = make_unique<message_filters::Subscriber<darknet_ros_msgs::BoundingBoxes>>(nh, bbox_topic, 1);
     sub_ = make_unique<message_filters::TimeSynchronizer<sensor_msgs::Image, darknet_ros_msgs::BoundingBoxes>>(*image_sub_, *bbox_sub_, 10);
@@ -63,28 +70,27 @@ namespace starmap
     pub_ = private_nh.advertise<kp_detector::KeypointsList>(keypoint_topic, 10);
 
     // model = torch.load(opt.loadModel)
+    NODELET_WARN("Loading  model from %s", starmap_model_path.c_str());
     model_ = torch::jit::load(starmap_model_path);
     if (gpu_id >= 0) {
       auto device = torch::Device(torch::DeviceType::CUDA, gpu_id);
       model_.to(device);
     }
-  };
-
-  void timerCb(const ros::TimerEvent& event){
-    // Using timers is the preferred 'ROS way' to manual threading
-    NODELET_INFO_STREAM("The time is now " << event.current_real);
   }
+
+    // void timerCb(const ros::TimerEvent& event){
+    //   // Using timers is the preferred 'ROS way' to manual threading
+    //   NODELET_INFO_STREAM("The time is now " << event.current_real);
+    // }
 
   // must use a ConstPtr callback to use zero-copy transport
   void messageCb(const sensor_msgs::ImageConstPtr& message,
                  const darknet_ros_msgs::BoundingBoxesConstPtr& bboxes) {
-    auto nh = getNodeHandle();
+    auto private_nh = getPrivateNodeHandle();
     int input_res;
-    if ( ! nh.param<int>("input_res", input_res, 256) )
-      throw std::runtime_error("Need input_res");
+    private_nh.param<int>("input_res", input_res, 256);
     bool visualize;
-    if ( ! nh.param<bool>("visualize", visualize, false) )
-      throw std::runtime_error("Need visualize");
+    private_nh.param<bool>("visualize", visualize, false);
     cv_bridge::CvImageConstPtr img = cv_bridge::toCvShare(message);
     kp_detector::KeypointsList keypoints;
     keypoints.header.stamp = keypoints.header.stamp;
@@ -94,10 +100,9 @@ namespace starmap
       Points pts;
       vector<Vec3f> xyz_list;
       vector<float> depth_list;
-      Mat hm00;
       Mat bboxfloat;
       bboxroi.convertTo(bboxfloat, CV_32FC3, 1/255.0);
-      tie(pts, xyz_list, depth_list, hm00) =
+      tie(pts, xyz_list, depth_list) =
         find_semantic_keypoints_prob_depth(model_, bboxfloat, input_res,
                                            /*visualize=*/false);
 
@@ -123,7 +128,7 @@ namespace starmap
   std::unique_ptr<message_filters::Subscriber<darknet_ros_msgs::BoundingBoxes>> bbox_sub_;
   std::unique_ptr<message_filters::TimeSynchronizer<sensor_msgs::Image, darknet_ros_msgs::BoundingBoxes>> sub_;
   ros::Publisher pub_;
-  ros::Timer timer_;
+    // ros::Timer timer_;
   torch::jit::script::Module model_;
 };
 

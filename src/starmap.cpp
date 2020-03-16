@@ -32,11 +32,11 @@ Points convert_to_precrop(const Points& keypoints,
                           const double addnl_scale_factor )
 {
   Points pre_crop_kp_vec;
-  Point2i curr_center(desired_side, desired_side);
+  Point2i curr_size(desired_side, desired_side);
   double scale_factor = scale_for_crop(pre_crop_size, desired_side);
   for (auto& kp: keypoints) {
-    Point2i pre_crop_kp = (kp * addnl_scale_factor - curr_center) * scale_factor
-      + pre_crop_size;
+    Point2i pre_crop_kp = (kp * addnl_scale_factor - curr_size / 2) / scale_factor
+      + pre_crop_size / 2;
     pre_crop_kp_vec.push_back(pre_crop_kp);
   }
   return pre_crop_kp_vec;
@@ -148,7 +148,7 @@ Mat tensorToMat(const at::Tensor &tensor)
 
 tuple<Mat, Mat, Mat>
   model_forward(torch::jit::script::Module& model,
-                         const Mat& imgfloat)
+                const Mat& imgfloat)
 {
   gsl_Expects(imgfloat.type() == CV_32FC3);
   auto input = matToTensor(imgfloat);
@@ -163,21 +163,28 @@ tuple<Mat, Mat, Mat>
   auto outele = out.toTuple()->elements();
   auto heatmap = outele[0].toTensor();
   Mat cvout = tensorToMat(heatmap[0][0]);
-  Mat xyz = tensorToMat(at::slice(heatmap[0], 1, 4) * imgfloat.size[0]);
+  auto heatmap1to3 = at::slice(heatmap[0], /*dim=*/0, /*start=*/1, /*end=*/4);
+  heatmap1to3 = at::transpose(heatmap1to3, 0, 1); // CWH -> WCH
+  heatmap1to3 = at::transpose(heatmap1to3, 1, 2); // CWH -> WHC
+  Mat xyz = tensorToMat(heatmap1to3 * imgfloat.size[0]);
   Mat depth = tensorToMat(heatmap[0][4] * imgfloat.size[0]);
   gsl_Ensures(cvout.type() == CV_32FC1);
+  if (xyz.type() != CV_32FC3) {
+    cerr << "xyz: " << xyz << "\n";
+  }
   gsl_Ensures(xyz.type() == CV_32FC3);
   gsl_Ensures(depth.type() == CV_32FC1);
   return make_tuple(cvout, xyz, depth);
 }
 
 
-tuple<Points, vector<Vec3f>, vector<float>, Mat>
+tuple<Points, vector<Vec3f>, vector<float>>
    find_semantic_keypoints_prob_depth(torch::jit::script::Module& model,
                                       const Mat& img,
                                       const int input_res,
                                       const bool visualize)
 {
+  const int ADDNL_SCALE_FACTOR = 4;
   // img2 = Crop(img, center, scale, input_res) / 256.;
   gsl_Expects(img.type() == CV_32FC3);
   Mat img_cropped = crop(img, input_res);
@@ -193,12 +200,22 @@ tuple<Points, vector<Vec3f>, vector<float>, Mat>
     depth_list.push_back(depth.at<float>(pt.y, pt.x));
   }
 
-  auto pts_old_kp = convert_to_precrop(pts, {img.size[1], img.size[0]}, input_res,
-                                       /*addnl_scale_factor=*/4);
+  if (visualize) {
+    Mat star;
+    resize(hm00 * 255, star, {img_cropped.size[0], img_cropped.size[1]});
+    Mat starvis;
+    cvtColor(star, starvis, COLOR_GRAY2BGR);
+    starvis = starvis * 0.5 + img_cropped * 255 * 0.5;
+    Mat starvisimg;
+    starvis.convertTo(starvisimg, CV_8UC1);
+    imshow("starvis", starvisimg);
+    waitKey(-1);
+  }
 
-  Mat hm00_resized;
-  resize(hm00, hm00_resized, Size(img_cropped.size[0], img_cropped.size[1]));
-  return make_tuple(pts, xyz_list, depth_list, hm00_resized);
+  auto pts_old_kp = convert_to_precrop(pts, {img.size[1], img.size[0]}, input_res,
+                                       /*addnl_scale_factor=*/ADDNL_SCALE_FACTOR);
+
+  return make_tuple(pts_old_kp, xyz_list, depth_list);
 }
 
 
@@ -227,17 +244,11 @@ vector<Point2i> run_starmap_on_img(const string& starmap_filepath,
     vector<Vec3f> xyz_list;
     vector<float> depth_list;
     Mat hm00;
-    tie(pts, xyz_list, depth_list, hm00) =
+    tie(pts, xyz_list, depth_list) =
       find_semantic_keypoints_prob_depth(model, imgfloat, input_res, visualize);
 
     if (visualize) {
       auto vis = img;
-      Mat star = hm00 * 255;
-      Mat starvis;
-      cvtColor(star, starvis, COLOR_GRAY2BGR);
-      starvis = starvis * 0.5 + imgfloat * 255 * 0.5;
-      Mat starvisimg;
-      starvis.convertTo(starvisimg, CV_8UC1);
       Point2i pt4;
       Vec3f xyz;
       for (int i: boost::counting_range<size_t>(0, pts.size())) {
@@ -247,7 +258,6 @@ vector<Point2i> run_starmap_on_img(const string& starmap_filepath,
         circle(vis, pt4, 2, Scalar(xyz[0], xyz[1], xyz[2]), -1);
       }
       imshow("vis", vis);
-      imshow("starvis", starvisimg);
       waitKey(-1);
     }
 

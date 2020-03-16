@@ -6,7 +6,5 @@
       <arg name="bounding_boxes" value="/darknet_ros/bounding_boxes_0" />
     </include>
   </group>
-  <!--node pkg="nodelet" type="nodelet" name="manager" args="manager" /-->
-  <!-- node pkg="nodelet" type="nodelet" name="starmap" args="standalone starmap/Starmap" output="screen"/-->
-  <node pkg="starmap" type="starmap_node" name="starmap" />
+  <!--include file="$(find starmap)launch/starmap.launch" /-->
 </launch>
