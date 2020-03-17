@@ -153,15 +153,16 @@ tuple<Mat, Mat, Mat>
   gsl_Expects(imgfloat.type() == CV_32FC3);
   auto input = matToTensor(imgfloat);
   // Make channel the first dimension CWH from WHC
-  input = at::transpose(input, 1, 2); // WHC -> WCH
-  input = at::transpose(input, 0, 1); // WCH -> CWH
-  input = at::unsqueeze(input, 0); // Make it NCWH
-  input.to((*model.parameters().begin()).device());
+  input.transpose_(1, 2); // WHC -> WCH
+  input.transpose_(0, 1); // WCH -> CWH
+  input.unsqueeze_(0); // Make it NCWH
+  torch::Device device = (*model.parameters().begin()).device();
+  input = input.to(device);
   vector<torch::jit::IValue> inputs;
   inputs.push_back(input);
   torch::jit::IValue out = model.forward(inputs);
   auto outele = out.toTuple()->elements();
-  auto heatmap = outele[0].toTensor();
+  auto heatmap = outele[0].toTensor().to(torch::DeviceType::CPU);
   Mat cvout = tensorToMat(heatmap[0][0]);
   auto heatmap1to3 = at::slice(heatmap[0], /*dim=*/0, /*start=*/1, /*end=*/4);
   heatmap1to3 = at::transpose(heatmap1to3, 0, 1); // CWH -> WCH
@@ -169,9 +170,6 @@ tuple<Mat, Mat, Mat>
   Mat xyz = tensorToMat(heatmap1to3 * imgfloat.size[0]);
   Mat depth = tensorToMat(heatmap[0][4] * imgfloat.size[0]);
   gsl_Ensures(cvout.type() == CV_32FC1);
-  if (xyz.type() != CV_32FC3) {
-    cerr << "xyz: " << xyz << "\n";
-  }
   gsl_Ensures(xyz.type() == CV_32FC3);
   gsl_Ensures(depth.type() == CV_32FC1);
   return make_tuple(cvout, xyz, depth);
@@ -235,10 +233,10 @@ vector<Point2i> run_starmap_on_img(const string& starmap_filepath,
 
     // model = torch.load(opt.loadModel)
     auto model = torch::jit::load(starmap_filepath);
-    if (gpu_id >= 0) {
-      auto device = torch::Device(torch::DeviceType::CUDA, gpu_id);
-      model.to(device);
-    }
+    torch::DeviceType device_type = gpu_id >= 0 ? torch::DeviceType::CUDA : torch::DeviceType::CPU;
+    int device_id = gpu_id >= 0 ? gpu_id : 0;
+    torch::Device device = torch::Device(device_type, gpu_id);
+    model.to(device);
 
     Points pts;
     vector<Vec3f> xyz_list;

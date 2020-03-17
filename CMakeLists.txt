@@ -234,7 +234,8 @@ install(PROGRAMS
 ## Add gtest based cpp test target and link libraries
 catkin_add_gtest(${PROJECT_NAME}-test
         tests/test_crop.cpp
-        tests/test_hmparse.cpp)
+        tests/test_hmparse.cpp
+        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(${PROJECT_NAME}-test ${PROJECT_NAME}
   ${catkin_LIBRARIES}
   "${Boost_LIBRARIES}"
