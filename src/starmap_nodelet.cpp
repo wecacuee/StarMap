@@ -14,9 +14,11 @@
 #include <image_transport/image_transport.h>
 #include <message_filters/time_synchronizer.h>
 #include <message_filters/subscriber.h>
-#include <darknet_ros_msgs/BoundingBoxes.h>
+#include <sort_ros/TrackedBoundingBoxes.h>
 #include <cv_bridge/cv_bridge.h>
-#include <kp_detector/KeypointsList.h>
+#include <starmap/SemanticKeypointWithCovariance.h>
+#include <starmap/TrackedBBoxListWithKeypoints.h>
+#include <starmap/TrackedBBoxWithKeypoints.h>
 #include "starmap/starmap.h"
 #include "boost/filesystem.hpp"
 
@@ -43,7 +45,8 @@ namespace starmap
   virtual void onInit() {
     NODELET_DEBUG("Initializing ");
     namespace sph = std::placeholders; // for _1, _2, ...
-    std::string image_topic, bbox_topic, keypoint_topic, starmap_model_path;
+    std::string image_topic, bbox_topic, keypoint_topic, visualization_topic,
+    starmap_model_path;
     int gpu_id;
     auto nh = getNodeHandle();
     auto private_nh = getPrivateNodeHandle();
@@ -59,6 +62,7 @@ namespace starmap
     private_nh.param<std::string>("image_topic", image_topic, "image");
     private_nh.param<std::string>("bbox_topic", bbox_topic, "bounding_boxes");
     private_nh.param<std::string>("keypoint_topic", keypoint_topic, "keypoints");
+    private_nh.param<std::string>("visualization_topic", visualization_topic, "visualization");
     private_nh.param<int>("gpu_id", gpu_id, -1);
     //timer_ = nh.createTimer(ros::Duration(1.0),
     //                        std::bind(& Starmap::timerCb, this, sph::_1));
@@ -75,18 +79,49 @@ namespace starmap
     NODELET_DEBUG("Subscribing to %s", image_topic.c_str());
     image_sub_ = make_unique<message_filters::Subscriber<sensor_msgs::Image>>(nh, image_topic, 1);
     bbox_sub_ = make_unique<
-      message_filters::Subscriber<darknet_ros_msgs::BoundingBoxes>>(nh, bbox_topic, 1);
+      message_filters::Subscriber<sort_ros::TrackedBoundingBoxes>>(nh, bbox_topic, 1);
     sub_ = make_unique<
       message_filters::TimeSynchronizer<
-        sensor_msgs::Image, darknet_ros_msgs::BoundingBoxes>>(*image_sub_, *bbox_sub_, 10);
+        sensor_msgs::Image, sort_ros::TrackedBoundingBoxes>>(*image_sub_, *bbox_sub_, 10);
     sub_->registerCallback(std::bind(&Starmap::messageCb, this, sph::_1, sph::_2));
-    pub_ = private_nh.advertise<kp_detector::KeypointsList>(keypoint_topic, 10);
+    pub_ = private_nh.advertise<starmap::TrackedBBoxListWithKeypoints>(keypoint_topic, 10);
+    vis_ = private_nh.advertise<sensor_msgs::Image>(visualization_topic, 10);
 
   }
 
+  cv::Rect2i safe_rect_bbox(const sort_ros::TrackedBoundingBox& bbox,
+                            const cv::Mat& image) {
+    int xmin = max<int>(0, bbox.xmin);
+    int ymin = max<int>(0, bbox.ymin);
+    int xmax = min<int>(image.cols, bbox.xmax);
+    int ymax = min<int>(image.rows, bbox.ymax);
+    cv::Rect2i bbox_rect(xmin, ymin, xmax-xmin, ymax - ymin);
+    return bbox_rect;
+  }
+
+  void  visualize_all_bbox(cv::Mat& image,
+                           const TrackedBBoxListWithKeypointsConstPtr& bbox_with_kp_list)
+  {
+    for (auto& bbox_with_kp : bbox_with_kp_list->bounding_boxes) {
+      auto bbox_rect = safe_rect_bbox(bbox_with_kp.bbox, image);
+      if (bbox_rect.area() < 1)
+        continue;
+      cv::rectangle(image, bbox_rect, cv::Scalar(0, 255, 0));
+      auto bboxroi = image(bbox_rect);
+      Points pts;
+      std::vector<cv::Vec3f> colors;
+      for (auto& semkp: bbox_with_kp.keypoints) {
+        pts.emplace_back(semkp.x, semkp.y);
+        colors.emplace_back(semkp.cov[0], semkp.cov[0]);
+      }
+      starmap::visualize_keypoints(bboxroi, pts, colors);
+    }
+  }
+
+
   // must use a ConstPtr callback to use zero-copy transport
   void messageCb(const sensor_msgs::ImageConstPtr& message,
-                 const darknet_ros_msgs::BoundingBoxesConstPtr& bboxes) {
+                 const sort_ros::TrackedBoundingBoxesConstPtr& bboxes) {
     NODELET_DEBUG("Callback called ... ");
     auto private_nh = getPrivateNodeHandle();
     int input_res;
@@ -94,43 +129,57 @@ namespace starmap
     bool visualize;
     private_nh.param<bool>("visualize", visualize, false);
     cv_bridge::CvImageConstPtr img = cv_bridge::toCvShare(message);
-    kp_detector::KeypointsList keypoints;
-    keypoints.header.stamp = message->header.stamp;
+    starmap::TrackedBBoxListWithKeypointsPtr bbox_with_kp_list =
+      boost::make_shared<starmap::TrackedBBoxListWithKeypoints>();
+    bbox_with_kp_list->header.stamp = message->header.stamp;
+    bbox_with_kp_list->header.frame_id = message->header.frame_id;
     for (auto& bbox: bboxes->bounding_boxes) {
-      auto bboxroi = img->image(cv::Rect2f(bbox.xmin, bbox.ymin,
-                                           bbox.xmax-bbox.xmin, bbox.ymax-bbox.ymin));
-      Points pts;
-      vector<Vec3f> xyz_list;
-      vector<float> depth_list;
-      Mat bboxfloat;
-      bboxroi.convertTo(bboxfloat, CV_32FC3, 1/255.0);
-      NODELET_DEBUG("Calling  model ... ");
-      tie(pts, xyz_list, depth_list) =
-        find_semantic_keypoints_prob_depth(model_, bboxfloat, input_res,
-                                           /*visualize=*/false);
+      auto bbox_rect = safe_rect_bbox(bbox, img->image);
+      starmap::TrackedBBoxWithKeypoints bbox_with_kp;
+      if (bbox_rect.area() >= 1) {
+        auto bboxroi = img->image(bbox_rect);
+        Points pts;
+        vector<Vec3f> xyz_list;
+        vector<float> depth_list;
+        vector<float> hm_list;
+        Mat bboxfloat;
+        bboxroi.convertTo(bboxfloat, CV_32FC3, 1/255.0);
+        NODELET_DEBUG("Calling  model ... ");
+        tie(pts, xyz_list, depth_list, hm_list) =
+          find_semantic_keypoints_prob_depth(model_, bboxfloat, input_res,
+                                            /*visualize=*/false);
 
-      kp_detector::Keypoints kpts;
-      kpts.Class = bbox.Class;
-      kpts.probability = bbox.probability;
-      kpts.xmin = bbox.xmin;
-      kpts.xmax = bbox.xmax;
-      kpts.ymin = bbox.ymin;
-      kpts.ymax = bbox.ymax;
-      std::cerr << "message: " << img << "bboxes: " << bboxes << "\n";
-      for (size_t i: boost::counting_range<size_t>(0, pts.size())) {
-        auto& pt = pts[i];
-        kpts.hm_keypoints.push_back( pt.x );
-        kpts.hm_keypoints.push_back( pt.y );
+        bbox_with_kp.bbox = bbox; // Duplicate information
+        std::cerr << "message: " << img << "bboxes: " << bboxes << "\n";
+        for (size_t i: boost::counting_range<size_t>(0, pts.size())) {
+          auto& pt = pts[i];
+          starmap::SemanticKeypointWithCovariance kpt;
+          kpt.x = pt.x;
+          kpt.y = pt.y;
+          kpt.cov.insert(kpt.cov.end(), {hm_list[i], 0, 0, hm_list[i]});
+          bbox_with_kp.keypoints.push_back(kpt);
+        }
       }
-      keypoints.keypoints_list.push_back(kpts);
+      bbox_with_kp_list->bounding_boxes.push_back(bbox_with_kp);
     }
-    pub_.publish(keypoints);
+    pub_.publish(bbox_with_kp_list);
+    if (vis_.getNumSubscribers() >= 1) {
+      cv::Mat vis = img->image.clone();
+      visualize_all_bbox(vis, bbox_with_kp_list);
+      cv_bridge::CvImage cvImage;
+      cvImage.header.stamp = bbox_with_kp_list->header.stamp;
+      cvImage.header.frame_id = bbox_with_kp_list->header.frame_id;
+      cvImage.encoding = sensor_msgs::image_encodings::BGR8;
+      cvImage.image = vis;
+      vis_.publish(*cvImage.toImageMsg());
+    }
   }
 
   std::unique_ptr<message_filters::Subscriber<sensor_msgs::Image>> image_sub_;
-  std::unique_ptr<message_filters::Subscriber<darknet_ros_msgs::BoundingBoxes>> bbox_sub_;
-  std::unique_ptr<message_filters::TimeSynchronizer<sensor_msgs::Image, darknet_ros_msgs::BoundingBoxes>> sub_;
+  std::unique_ptr<message_filters::Subscriber<sort_ros::TrackedBoundingBoxes>> bbox_sub_;
+  std::unique_ptr<message_filters::TimeSynchronizer<sensor_msgs::Image, sort_ros::TrackedBoundingBoxes>> sub_;
   ros::Publisher pub_;
+  ros::Publisher vis_;
     // ros::Timer timer_;
   torch::jit::script::Module model_;
 };

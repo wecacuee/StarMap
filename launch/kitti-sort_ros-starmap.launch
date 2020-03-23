@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<launch>
+  <node pkg="img_publisher" type="publisher.py" name="img_publisher_0" />
+  <include file="$(find darknet_ros)/launch/darknet_ros.launch" >
+    <arg name="image" value="/image_raw_0" />
+    <arg name="bounding_boxes" value="/darknet_ros/bounding_boxes_0" />
+  </include>
+  <node pkg="nodelet" type="nodelet" name="orcvio_nodelet_manager"  args="manager" output="screen"/>
+  <node pkg="nodelet" type="nodelet" name="sort_ros"
+  args="load sort_ros/SortRos orcvio_nodelet_manager" >
+    <param name="image_topic" value="image_raw_0" />
+    <param name="bbox_topic" value="darknet_ros/bounding_boxes_0" />
+    <param name="tracked_bbox_topic" value="tracked_bounding_boxes_0" />
+  </node>
+  <!-- include file="$(find starmap/launch/starmap.launch)" /-->
+</launch>

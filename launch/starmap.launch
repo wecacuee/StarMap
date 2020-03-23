@@ -1,11 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
 <launch>
-  <!--node pkg="nodelet" type="nodelet" name="manager" args="manager" /-->
-  <!-- node pkg="nodelet" type="nodelet" name="starmap" args="standalone starmap/Starmap" output="screen"/-->
-  <node pkg="starmap" type="starmap_node" name="starmap" >
-    <param name="image_topic" value="/image_raw_0" />
-    <param name="bbox_topic" value="/darknet_ros/bounding_boxes_0" />
-    <param name="keypoint_topic" value="/starmap/keypoints_0" />
+  <node pkg="starmap" type="starmap_node" name="starmap" launch-prefix="gdb -ex run -args" output="screen">
+    <param name="image_topic" value="image_raw_0" />
+    <param name="bbox_topic" value="sort_ros/tracked_bounding_boxes_0" />
+    <param name="keypoint_topic" value="keypoints_0" />
     <param name="starmap_model_path" value="$(find starmap)/models/model_cpu-jit.pth" />
-    <param name="gpu_id" value="0" type="int" />
+    <param name="gpu_id" value="-1" type="int" />
   </node>
 </launch>

@@ -16,6 +16,8 @@ find_package(catkin REQUIRED COMPONENTS
     nodelet
     message_filters
     cv_bridge
+    sort_ros
+    sensor_msgs
     )
 
 ## System dependencies are found with CMake's conventions
@@ -25,7 +27,7 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${TORCH_CXX_FLAGS}")
 find_package(OpenCV 3.4 REQUIRED)
 find_package(Eigen3 REQUIRED)
 find_package( gsl-lite 0.36 REQUIRED )
-include(ExternalProject)
+# include(ExternalProject)
 # if (CATKIN_ENABLE_TESTING)
 #   find_package(HighFive 2.1 REQUIRED)
 # endif()
@@ -63,8 +65,9 @@ include(ExternalProject)
 ## Generate messages in the 'msg' folder
 add_message_files(
   FILES
-  Keypoints.msg
-  KeypointsList.msg
+  SemanticKeypointWithCovariance.msg
+  TrackedBBoxWithKeypoints.msg
+  TrackedBBoxListWithKeypoints.msg
 )
 
 ## Generate services in the 'srv' folder
@@ -82,10 +85,12 @@ add_message_files(
 # )
 
 ## Generate added messages and services with any dependencies listed here
-# generate_messages(
-#   DEPENDENCIES
-#   std_msgs  # Or other packages containing msgs
-# )
+generate_messages(
+DEPENDENCIES
+std_msgs
+sort_ros
+sensor_msgs
+)
 
 ################################################
 ## Declare ROS dynamic reconfigure parameters ##
@@ -117,10 +122,11 @@ add_message_files(
 ## CATKIN_DEPENDS: catkin_packages dependent projects also need
 ## DEPENDS: system dependencies of this project that dependent projects also need
 catkin_package(
-#  INCLUDE_DIRS include
-#  LIBRARIES starmap
-CATKIN_DEPENDS message_runtime
-#  DEPENDS system_lib
+  INCLUDE_DIRS include
+  LIBRARIES starmap
+  CATKIN_DEPENDS message_runtime
+  sensor_msgs
+  DEPENDS Boost OpenCV EIGEN3
 )
 
 ###########

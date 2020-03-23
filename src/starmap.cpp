@@ -176,7 +176,7 @@ tuple<Mat, Mat, Mat>
 }
 
 
-tuple<Points, vector<Vec3f>, vector<float>>
+  tuple<Points, vector<Vec3f>, vector<float>, vector<float>>
    find_semantic_keypoints_prob_depth(torch::jit::script::Module& model,
                                       const Mat& img,
                                       const int input_res,
@@ -192,10 +192,12 @@ tuple<Points, vector<Vec3f>, vector<float>>
   auto pts = parse_heatmap(hm00, 0.1);
   vector<Vec3f> xyz_list;
   vector<float> depth_list;
+  vector<float> hm_list;
   for (auto& pt: pts) {
     Scalar xyz_at = xyz.at<Scalar>(pt.y, pt.x);
     xyz_list.emplace_back(xyz_at[0], xyz_at[1], xyz_at[2]);
     depth_list.push_back(depth.at<float>(pt.y, pt.x));
+    hm_list.push_back(hm00.at<float>(pt.y, pt.x));
   }
 
   if (visualize) {
@@ -213,7 +215,7 @@ tuple<Points, vector<Vec3f>, vector<float>>
   auto pts_old_kp = convert_to_precrop(pts, {img.size[1], img.size[0]}, input_res,
                                        /*addnl_scale_factor=*/ADDNL_SCALE_FACTOR);
 
-  return make_tuple(pts_old_kp, xyz_list, depth_list);
+  return make_tuple(pts_old_kp, xyz_list, depth_list, hm_list);
 }
 
 
@@ -241,25 +243,27 @@ vector<Point2i> run_starmap_on_img(const string& starmap_filepath,
     Points pts;
     vector<Vec3f> xyz_list;
     vector<float> depth_list;
-    Mat hm00;
-    tie(pts, xyz_list, depth_list) =
+    vector<float> hm_list;
+    tie(pts, xyz_list, depth_list, hm_list) =
       find_semantic_keypoints_prob_depth(model, imgfloat, input_res, visualize);
 
     if (visualize) {
       auto vis = img;
-      Point2i pt4;
-      Vec3f xyz;
-      for (int i: boost::counting_range<size_t>(0, pts.size())) {
-        auto& pt4 = pts[i];
-        auto& xyz = xyz_list[i];
-        circle(vis, pt4, 4, Scalar(255, 255, 255), -1);
-        circle(vis, pt4, 2, Scalar(xyz[0], xyz[1], xyz[2]), -1);
-      }
+      visualize_keypoints(vis, pts, xyz_list);
       imshow("vis", vis);
       waitKey(-1);
     }
 
     return pts;
+}
+
+void visualize_keypoints(Mat& vis, const Points& pts, const vector<Vec3f>& colors) {
+  for (int i: boost::counting_range<size_t>(0, pts.size())) {
+    auto& pt4 = pts[i];
+    auto& col = colors[i];
+    circle(vis, pt4, 4, Scalar(255, 255, 255), -1);
+    circle(vis, pt4, 2, Scalar(col[0], col[1], col[2]), -1);
+  }
 }
 
 }
