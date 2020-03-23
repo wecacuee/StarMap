@@ -119,7 +119,9 @@ Mat nms(const Mat& det, const int size) {
 vector<Point2i>
     parse_heatmap(Mat & det, const float thresh) {
   gsl_Expects(det.dims == 2);
-  det.setTo(0, det < thresh);
+  gsl_Expects(det.data != nullptr);
+  Mat mask = det < thresh;
+  det.setTo(0, mask);
   Mat pooled = nms(det);
   vector<Point2i> pts;
   findNonZero(pooled > 0, pts);
@@ -147,7 +149,7 @@ Mat tensorToMat(const at::Tensor &tensor)
 }
 
 tuple<Mat, Mat, Mat>
-  model_forward(torch::jit::script::Module& model,
+  model_forward(torch::jit::script::Module model,
                 const Mat& imgfloat)
 {
   gsl_Expects(imgfloat.type() == CV_32FC3);
@@ -157,12 +159,14 @@ tuple<Mat, Mat, Mat>
   input.transpose_(0, 1); // WCH -> CWH
   input.unsqueeze_(0); // Make it NCWH
   torch::Device device = (*model.parameters().begin()).device();
-  input = input.to(device);
+  auto input_device = input.to(device);
   vector<torch::jit::IValue> inputs;
-  inputs.push_back(input);
+  inputs.push_back(input_device);
   torch::jit::IValue out = model.forward(inputs);
   auto outele = out.toTuple()->elements();
-  auto heatmap = outele[0].toTensor().to(torch::DeviceType::CPU);
+  auto heatmap_device = outele[0].toTensor();
+  torch::Device cpu = torch::Device(torch::DeviceType::CPU, 0);
+  auto heatmap = heatmap_device.to(cpu);
   Mat cvout = tensorToMat(heatmap[0][0]);
   auto heatmap1to3 = at::slice(heatmap[0], /*dim=*/0, /*start=*/1, /*end=*/4);
   heatmap1to3 = at::transpose(heatmap1to3, 0, 1); // CWH -> WCH
@@ -176,8 +180,8 @@ tuple<Mat, Mat, Mat>
 }
 
 
-  tuple<Points, vector<Vec3f>, vector<float>, vector<float>>
-   find_semantic_keypoints_prob_depth(torch::jit::script::Module& model,
+tuple<Points, vector<Vec3f>, vector<float>, vector<float>>
+   find_semantic_keypoints_prob_depth(torch::jit::script::Module model,
                                       const Mat& img,
                                       const int input_res,
                                       const bool visualize)

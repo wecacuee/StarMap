@@ -147,10 +147,9 @@ namespace starmap
         NODELET_DEBUG("Calling  model ... ");
         tie(pts, xyz_list, depth_list, hm_list) =
           find_semantic_keypoints_prob_depth(model_, bboxfloat, input_res,
-                                            /*visualize=*/false);
+                                            /*visualize=*/visualize);
 
         bbox_with_kp.bbox = bbox; // Duplicate information
-        std::cerr << "message: " << img << "bboxes: " << bboxes << "\n";
         for (size_t i: boost::counting_range<size_t>(0, pts.size())) {
           auto& pt = pts[i];
           starmap::SemanticKeypointWithCovariance kpt;
