@@ -109,3 +109,10 @@ ENV/
 # mypy
 .mypy_cache/
 *.bak
+nohup.out
+build
+data/Pascal3D
+.dir-locals.el
+.gdb_history
+CMakeLists.txt.user
+
