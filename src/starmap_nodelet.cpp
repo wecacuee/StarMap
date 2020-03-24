@@ -1,5 +1,7 @@
 #include <memory>
 #include <functional>
+#include <mutex>
+#include <queue>
 
 #include "boost/range/counting_range.hpp"
 #include "opencv2/opencv.hpp" // cv::*
@@ -65,8 +67,8 @@ namespace starmap
     private_nh.param<std::string>("keypoint_topic", keypoint_topic, "keypoints");
     private_nh.param<std::string>("visualization_topic", visualization_topic, "visualization");
     private_nh.param<int>("gpu_id", gpu_id, -1);
-    timer_ = nh.createTimer(ros::Duration(1.0),
-                             std::bind(& Starmap::timerCb, this, sph::_1));
+    timer_ = nh.createTimer(ros::Duration(0.03),
+                            std::bind(& Starmap::timerCb, this, sph::_1));
 
     // model = torch.load(opt.loadModel)
     NODELET_DEBUG("Loading  model from %s", starmap_model_path.c_str());
@@ -172,7 +174,7 @@ namespace starmap
       cvImage.image = vis;
       {
         const std::lock_guard<std::mutex> lock(image_to_publish_mutex_);
-        image_to_publish_ = cvImage.toImageMsg();
+        image_to_publish_queue_.push(cvImage.toImageMsg());
         // vis_.publish(*cvImage.toImageMsg());
       }
     }
@@ -180,9 +182,10 @@ namespace starmap
 
   void timerCb(const ros::TimerEvent &) {
     const std::lock_guard<std::mutex> lock(image_to_publish_mutex_);
-    if (image_to_publish_) {
+    if ( ! image_to_publish_queue_.empty()) {
       NODELET_DEBUG("publishing visualization... ");
-      vis_.publish(image_to_publish_);
+      vis_.publish(image_to_publish_queue_.front());
+      image_to_publish_queue_.pop();
     }
   }
 
@@ -195,7 +198,7 @@ namespace starmap
   std::unique_ptr<image_transport::ImageTransport> image_trans_;
   ros::Timer timer_;
   torch::jit::script::Module model_;
-  sensor_msgs::ImageConstPtr image_to_publish_;
+  std::queue<sensor_msgs::ImageConstPtr> image_to_publish_queue_;
   std::mutex image_to_publish_mutex_;
 };
 

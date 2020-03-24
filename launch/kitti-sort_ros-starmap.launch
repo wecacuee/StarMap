@@ -12,5 +12,7 @@
     <param name="bbox_topic" value="darknet_ros/bounding_boxes_0" />
     <param name="tracked_bbox_topic" value="tracked_bounding_boxes_0" />
   </node>
-  <!--include file="$(find starmap)/launch/starmap.launch" /-->
+  <include file="$(find starmap)/launch/starmap.launch" >
+    <arg name="nodelet_manager" value="orcvio_nodelet_manager" />
+  </include>
 </launch>
