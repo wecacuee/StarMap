@@ -98,9 +98,11 @@ Mat nms(const Mat& det, const int size) {
   for (int i = start; i < det.size[0] - start; ++i) {
     for (int j = start; j < det.size[1] - start; ++j) {
       Mat window = det(Range(i-start, i-start+size),
-                           Range(j-start, j-start+size));
-      pooled.at<float>(i, j) = *max_element(window.begin<float>(),
-                                                 window.end<float>());
+                       Range(j-start, j-start+size));
+      double minval, maxval;
+      minMaxLoc(window, &minval, &maxval);
+      // auto mele = max_element(window.begin<float>(), window.end<float>());
+      pooled.at<float>(i, j) = maxval;
     }
   }
   // Suppress the non-max parts
@@ -140,11 +142,13 @@ at::Tensor matToTensor(const Mat &image)
 Mat tensorToMat(const at::Tensor &tensor)
 {
   gsl_Expects(tensor.ndimension() == 3 || tensor.ndimension() == 2);
+  gsl_Expects(tensor.dtype() == torch::kFloat32);
+  auto tensor_c = tensor.contiguous();
   auto sizes = tensor.sizes();
   if (tensor.ndimension() == 3) {
-      return Mat(sizes[0], sizes[1], CV_32FC(sizes[2]), tensor.data_ptr());
+    return Mat(sizes[0], sizes[1], CV_32FC(sizes[2]), tensor_c.data_ptr());
   } else if (tensor.ndimension() == 2) {
-      return Mat(sizes[0], sizes[1], CV_32F, tensor.data_ptr());
+    return Mat(sizes[0], sizes[1], CV_32F, tensor_c.data_ptr());
   }
 }
 
@@ -155,8 +159,7 @@ tuple<Mat, Mat, Mat>
   gsl_Expects(imgfloat.type() == CV_32FC3);
   auto input = matToTensor(imgfloat);
   // Make channel the first dimension CWH from WHC
-  input.transpose_(1, 2); // WHC -> WCH
-  input.transpose_(0, 1); // WCH -> CWH
+  input = input.permute({2, 0, 1}); // WHC -> CWH
   input.unsqueeze_(0); // Make it NCWH
   torch::Device device = (*model.parameters().begin()).device();
   auto input_device = input.to(device);
@@ -169,14 +172,13 @@ tuple<Mat, Mat, Mat>
   auto heatmap = heatmap_device.to(cpu);
   Mat cvout = tensorToMat(heatmap[0][0]);
   auto heatmap1to3 = at::slice(heatmap[0], /*dim=*/0, /*start=*/1, /*end=*/4);
-  heatmap1to3 = at::transpose(heatmap1to3, 0, 1); // CWH -> WCH
-  heatmap1to3 = at::transpose(heatmap1to3, 1, 2); // CWH -> WHC
+  heatmap1to3 = heatmap1to3.permute({ 1, 2, 0}); // CWH -> WHC
   Mat xyz = tensorToMat(heatmap1to3 * imgfloat.size[0]);
   Mat depth = tensorToMat(heatmap[0][4] * imgfloat.size[0]);
   gsl_Ensures(cvout.type() == CV_32FC1);
   gsl_Ensures(xyz.type() == CV_32FC3);
   gsl_Ensures(depth.type() == CV_32FC1);
-  return make_tuple(cvout, xyz, depth);
+  return make_tuple(cvout.clone(), xyz.clone(), depth.clone());
 }
 
 
@@ -198,8 +200,8 @@ tuple<Points, vector<Vec3f>, vector<float>, vector<float>>
   vector<float> depth_list;
   vector<float> hm_list;
   for (auto& pt: pts) {
-    Scalar xyz_at = xyz.at<Scalar>(pt.y, pt.x);
-    xyz_list.emplace_back(xyz_at[0], xyz_at[1], xyz_at[2]);
+    Point3f xyz_at = xyz.at<Point3f>(pt.y, pt.x);
+    xyz_list.emplace_back(xyz_at.x, xyz_at.y, xyz_at.z);
     depth_list.push_back(depth.at<float>(pt.y, pt.x));
     hm_list.push_back(hm00.at<float>(pt.y, pt.x));
   }

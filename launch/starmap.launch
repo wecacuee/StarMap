@@ -1,7 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <launch>
-  <node pkg="nodelet" type="nodelet" name="starmap"
-       args="load starmap/Starmap orcvio_nodelet_manager" 
+  <node pkg="starmap" type="starmap_node" name="starmap"
        output="screen">
     <param name="image_topic" value="image_raw_0" />
     <param name="bbox_topic" value="sort_ros/tracked_bounding_boxes_0" />

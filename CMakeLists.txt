@@ -1,6 +1,12 @@
 cmake_minimum_required(VERSION 3.10.2)
 project(starmap)
 
+# set (CMAKE_CXX_FLAGS_DEBUG
+#   "${CMAKE_CXX_FLAGS_DEBUG} -fno-omit-frame-pointer -fsanitize=address")
+# set (CMAKE_LINKER_FLAGS_DEBUG
+#   "${CMAKE_LINKER_FLAGS_DEBUG} -fno-omit-frame-pointer -fsanitize=address")
+
+
 ## Compile as C++11, supported in ROS Kinetic and newer
 # add_compile_options(-std=c++11)
 
@@ -8,16 +14,17 @@ project(starmap)
 ## if COMPONENTS list like find_package(catkin REQUIRED COMPONENTS xyz)
 ## is used, also find other catkin packages
 find_package(catkin REQUIRED COMPONENTS
+    cv_bridge
+    image_transport
+    message_filters
+    message_generation
+    nodelet
+    pluginlib
     roscpp
     rospy
-    std_msgs
-    message_generation
-    pluginlib
-    nodelet
-    message_filters
-    cv_bridge
-    sort_ros
     sensor_msgs
+    sort_ros
+    std_msgs
     )
 
 ## System dependencies are found with CMake's conventions
@@ -126,6 +133,17 @@ catkin_package(
   LIBRARIES starmap
   CATKIN_DEPENDS message_runtime
   sensor_msgs
+  image_transport
+  cv_bridge
+  image_transport
+  message_filters
+  message_generation
+  nodelet
+  pluginlib
+  roscpp
+  sensor_msgs
+  sort_ros
+  std_msgs
   DEPENDS Boost OpenCV EIGEN3
 )
 

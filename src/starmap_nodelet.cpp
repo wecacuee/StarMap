@@ -21,6 +21,7 @@
 #include <starmap/TrackedBBoxWithKeypoints.h>
 #include "starmap/starmap.h"
 #include "boost/filesystem.hpp"
+#include "image_transport/subscriber_filter.h"
 
 using namespace std;
 using cv::Mat;
@@ -39,7 +40,7 @@ namespace starmap
   class Starmap : public nodelet::Nodelet
   {
   public:
-    Starmap() {}
+    Starmap() : sub_(10) {}
 
   private:
   virtual void onInit() {
@@ -64,8 +65,8 @@ namespace starmap
     private_nh.param<std::string>("keypoint_topic", keypoint_topic, "keypoints");
     private_nh.param<std::string>("visualization_topic", visualization_topic, "visualization");
     private_nh.param<int>("gpu_id", gpu_id, -1);
-    //timer_ = nh.createTimer(ros::Duration(1.0),
-    //                        std::bind(& Starmap::timerCb, this, sph::_1));
+    timer_ = nh.createTimer(ros::Duration(1.0),
+                             std::bind(& Starmap::timerCb, this, sph::_1));
 
     // model = torch.load(opt.loadModel)
     NODELET_DEBUG("Loading  model from %s", starmap_model_path.c_str());
@@ -77,15 +78,14 @@ namespace starmap
     model_.to(device);
 
     NODELET_DEBUG("Subscribing to %s", image_topic.c_str());
-    image_sub_ = make_unique<message_filters::Subscriber<sensor_msgs::Image>>(nh, image_topic, 1);
-    bbox_sub_ = make_unique<
-      message_filters::Subscriber<sort_ros::TrackedBoundingBoxes>>(nh, bbox_topic, 1);
-    sub_ = make_unique<
-      message_filters::TimeSynchronizer<
-        sensor_msgs::Image, sort_ros::TrackedBoundingBoxes>>(*image_sub_, *bbox_sub_, 10);
-    sub_->registerCallback(std::bind(&Starmap::messageCb, this, sph::_1, sph::_2));
+    image_trans_ = make_unique<image_transport::ImageTransport>(private_nh);
+    image_sub_.subscribe(nh, image_topic, 10);
+    bbox_sub_.subscribe(nh, bbox_topic, 10);
+    sub_.connectInput(image_sub_, bbox_sub_);
+    sub_.registerCallback(std::bind(&Starmap::messageCb, this, sph::_1, sph::_2));
     pub_ = private_nh.advertise<starmap::TrackedBBoxListWithKeypoints>(keypoint_topic, 10);
-    vis_ = private_nh.advertise<sensor_msgs::Image>(visualization_topic, 10);
+
+    vis_ = image_trans_->advertise(visualization_topic, 10);
 
   }
 
@@ -170,17 +170,33 @@ namespace starmap
       cvImage.header.frame_id = bbox_with_kp_list->header.frame_id;
       cvImage.encoding = sensor_msgs::image_encodings::BGR8;
       cvImage.image = vis;
-      vis_.publish(*cvImage.toImageMsg());
+      {
+        const std::lock_guard<std::mutex> lock(image_to_publish_mutex_);
+        image_to_publish_ = cvImage.toImageMsg();
+        // vis_.publish(*cvImage.toImageMsg());
+      }
     }
   }
 
-  std::unique_ptr<message_filters::Subscriber<sensor_msgs::Image>> image_sub_;
-  std::unique_ptr<message_filters::Subscriber<sort_ros::TrackedBoundingBoxes>> bbox_sub_;
-  std::unique_ptr<message_filters::TimeSynchronizer<sensor_msgs::Image, sort_ros::TrackedBoundingBoxes>> sub_;
+  void timerCb(const ros::TimerEvent &) {
+    const std::lock_guard<std::mutex> lock(image_to_publish_mutex_);
+    if (image_to_publish_) {
+      NODELET_DEBUG("publishing visualization... ");
+      vis_.publish(image_to_publish_);
+    }
+  }
+
+  message_filters::Subscriber<sensor_msgs::Image> image_sub_;
+    //image_transport::SubscriberFilter image_sub_;
+  message_filters::Subscriber<sort_ros::TrackedBoundingBoxes> bbox_sub_;
+  message_filters::TimeSynchronizer<sensor_msgs::Image, sort_ros::TrackedBoundingBoxes> sub_;
   ros::Publisher pub_;
-  ros::Publisher vis_;
-    // ros::Timer timer_;
+  image_transport::Publisher vis_;
+  std::unique_ptr<image_transport::ImageTransport> image_trans_;
+  ros::Timer timer_;
   torch::jit::script::Module model_;
+  sensor_msgs::ImageConstPtr image_to_publish_;
+  std::mutex image_to_publish_mutex_;
 };
 
 } // namespace Starmap
