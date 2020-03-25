@@ -12,8 +12,8 @@
   <include file="$(find starmap)/launch/starmap.launch" >
     <arg name="nodelet_manager" value="orcvio_nodelet_manager" />
   </include>
-  <node pkg="rqt_image_view" type="rqt_image_view" name="rqt_image_view_det"
-        args=" /sort_ros/detection_image"/>
+  <!-- node pkg="rqt_image_view" type="rqt_image_view" name="rqt_image_view_det"
+        args=" /sort_ros/detection_image"/-->
   <!-- node pkg="rqt_image_view" type="rqt_image_view" name="rqt_image_view_vis"
-       args=" /starmap/visualization/compressed"/ -->
+       args=" /starmap/visualization/theora"/--> 
 </launch>

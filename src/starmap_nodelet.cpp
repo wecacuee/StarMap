@@ -4,6 +4,7 @@
 #include <queue>
 
 #include "boost/range/counting_range.hpp"
+#include "boost/format.hpp"
 #include "opencv2/opencv.hpp" // cv::*
 
 #include "ros/ros.h"
@@ -29,6 +30,7 @@ using namespace std;
 using cv::Mat;
 using cv::Vec3f;
 namespace bfs = boost::filesystem;
+using boost::format;
 
 namespace starmap
 {
@@ -105,10 +107,18 @@ namespace starmap
                            const TrackedBBoxListWithKeypointsConstPtr& bbox_with_kp_list)
   {
     for (auto& bbox_with_kp : bbox_with_kp_list->bounding_boxes) {
+      auto& bbox = bbox_with_kp.bbox;
       auto bbox_rect = safe_rect_bbox(bbox_with_kp.bbox, image);
       if (bbox_rect.area() < 1)
         continue;
-      cv::rectangle(image, bbox_rect, cv::Scalar(0, 255, 0));
+      int id_dep_num = ((bbox.id * 6553) % 255); // id dependent number generation
+      cv::Scalar color(255 - id_dep_num, id_dep_num, 255 - id_dep_num);
+      cv::rectangle(image, bbox_rect, color, 2);
+      cv::putText(image, (format("id: %d") % bbox.id).str(),
+                  {bbox_rect.x, bbox_rect.y},
+                  cv::FONT_HERSHEY_SIMPLEX,
+                  std::max(0.8, 4.0 * bbox_rect.height / image.rows),
+                  color, 2);
       auto bboxroi = image(bbox_rect);
       Points pts;
       std::vector<cv::Vec3f> colors;
