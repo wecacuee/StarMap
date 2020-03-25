@@ -6,13 +6,14 @@
     <arg name="bounding_boxes" value="/darknet_ros/bounding_boxes_0" />
   </include>
   <node pkg="nodelet" type="nodelet" name="orcvio_nodelet_manager"  args="manager" output="screen"/>
-  <node pkg="nodelet" type="nodelet" name="sort_ros"
-  args="load sort_ros/SortRos orcvio_nodelet_manager" >
-    <param name="image_topic" value="image_raw_0" />
-    <param name="bbox_topic" value="darknet_ros/bounding_boxes_0" />
-    <param name="tracked_bbox_topic" value="tracked_bounding_boxes_0" />
-  </node>
+  <include file="$(find starmap)/launch/sort-ros.launch" >
+    <arg name="nodelet_manager" value="orcvio_nodelet_manager" />
+  </include>
   <include file="$(find starmap)/launch/starmap.launch" >
     <arg name="nodelet_manager" value="orcvio_nodelet_manager" />
   </include>
+  <node pkg="rqt_image_view" type="rqt_image_view" name="rqt_image_view_det"
+        args=" /sort_ros/detection_image"/>
+  <!-- node pkg="rqt_image_view" type="rqt_image_view" name="rqt_image_view_vis"
+       args=" /starmap/visualization/compressed"/ -->
 </launch>

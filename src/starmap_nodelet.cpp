@@ -67,7 +67,7 @@ namespace starmap
     private_nh.param<std::string>("keypoint_topic", keypoint_topic, "keypoints");
     private_nh.param<std::string>("visualization_topic", visualization_topic, "visualization");
     private_nh.param<int>("gpu_id", gpu_id, -1);
-    timer_ = nh.createTimer(ros::Duration(0.03),
+    timer_ = nh.createTimer(ros::Duration(0.05),
                             std::bind(& Starmap::timerCb, this, sph::_1));
 
     // model = torch.load(opt.loadModel)
@@ -165,32 +165,40 @@ namespace starmap
     }
     pub_.publish(bbox_with_kp_list);
     if (vis_.getNumSubscribers() >= 1) {
-      cv::Mat vis = img->image.clone();
-      visualize_all_bbox(vis, bbox_with_kp_list);
-      cv_bridge::CvImage cvImage;
-      cvImage.header.stamp = bbox_with_kp_list->header.stamp;
-      cvImage.header.frame_id = bbox_with_kp_list->header.frame_id;
-      cvImage.encoding = sensor_msgs::image_encodings::BGR8;
-      cvImage.image = vis;
-      {
-        const std::lock_guard<std::mutex> lock(image_to_publish_mutex_);
-        image_to_publish_queue_.push(cvImage.toImageMsg());
-        // vis_.publish(*cvImage.toImageMsg());
+      const std::lock_guard<std::mutex> lock(image_to_publish_mutex_);
+      if (input_img_bbox_queue_.size() < max_queue_size_) {
+        cv::Mat vis = img->image.clone();
+        input_img_bbox_queue_.emplace(vis, bbox_with_kp_list);
       }
     }
   }
 
   void timerCb(const ros::TimerEvent &) {
-    const std::lock_guard<std::mutex> lock(image_to_publish_mutex_);
-    if ( ! image_to_publish_queue_.empty()) {
+    cv::Mat vis;
+    starmap::TrackedBBoxListWithKeypointsConstPtr bbox_with_kp_list;
+    {
+      const std::lock_guard<std::mutex> lock(image_to_publish_mutex_);
+      if ( ! input_img_bbox_queue_.empty()) {
+        std::tie(vis, bbox_with_kp_list) = input_img_bbox_queue_.front();
+        input_img_bbox_queue_.pop();
+      }
+    }
+
+    if (bbox_with_kp_list && vis.data != nullptr) {
+      visualize_all_bbox(vis, bbox_with_kp_list);
+      cv_bridge::CvImage cvImage;
+      // cvImage.header.stamp = bbox_with_kp_list->header.stamp;
+      cvImage.header.stamp = ros::Time::now();
+      cvImage.header.frame_id = bbox_with_kp_list->header.frame_id;
+      cvImage.encoding = sensor_msgs::image_encodings::BGR8;
+      cvImage.image = vis;
+
       NODELET_DEBUG("publishing visualization... ");
-      vis_.publish(image_to_publish_queue_.front());
-      image_to_publish_queue_.pop();
+      vis_.publish(cvImage.toImageMsg());
     }
   }
 
   message_filters::Subscriber<sensor_msgs::Image> image_sub_;
-    //image_transport::SubscriberFilter image_sub_;
   message_filters::Subscriber<sort_ros::TrackedBoundingBoxes> bbox_sub_;
   message_filters::TimeSynchronizer<sensor_msgs::Image, sort_ros::TrackedBoundingBoxes> sub_;
   ros::Publisher pub_;
@@ -198,8 +206,12 @@ namespace starmap
   std::unique_ptr<image_transport::ImageTransport> image_trans_;
   ros::Timer timer_;
   torch::jit::script::Module model_;
-  std::queue<sensor_msgs::ImageConstPtr> image_to_publish_queue_;
+  std::queue<std::tuple<
+               cv::Mat,
+               starmap::TrackedBBoxListWithKeypointsConstPtr>
+             > input_img_bbox_queue_;
   std::mutex image_to_publish_mutex_;
+  int max_queue_size_ = 10;
 };
 
 } // namespace Starmap
