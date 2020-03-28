@@ -48,6 +48,7 @@
   <depend>sensor_msgs</depend>
   <depend>sort_ros</depend>
   <depend>std_msgs</depend>
+  <depend>starmap_ros_msgs</depend>
   <!-- Use build_export_depend for packages you need in order to build against this package: -->
   <!--   <build_export_depend>message_generation</build_export_depend> -->
   <!-- Use buildtool_depend for build tool packages: -->

@@ -17,7 +17,6 @@ find_package(catkin REQUIRED COMPONENTS
     cv_bridge
     image_transport
     message_filters
-    message_generation
     nodelet
     pluginlib
     roscpp
@@ -25,6 +24,7 @@ find_package(catkin REQUIRED COMPONENTS
     sensor_msgs
     sort_ros
     std_msgs
+    starmap_ros_msgs
     )
 
 ## System dependencies are found with CMake's conventions
@@ -70,12 +70,6 @@ find_package( gsl-lite 0.36 REQUIRED )
 ##   * add every package in MSG_DEP_SET to generate_messages(DEPENDENCIES ...)
 
 ## Generate messages in the 'msg' folder
-add_message_files(
-  FILES
-  SemanticKeypointWithCovariance.msg
-  TrackedBBoxWithKeypoints.msg
-  TrackedBBoxListWithKeypoints.msg
-)
 
 ## Generate services in the 'srv' folder
 # add_service_files(
@@ -91,13 +85,6 @@ add_message_files(
 #   Action2.action
 # )
 
-## Generate added messages and services with any dependencies listed here
-generate_messages(
-DEPENDENCIES
-std_msgs
-sort_ros
-sensor_msgs
-)
 
 ################################################
 ## Declare ROS dynamic reconfigure parameters ##

@@ -98,3 +98,20 @@ TEST(HmParser, parseHeatmap_car) {
     ASSERT_EQ(expected_pts.at<int>(1, i), pts[i].x) << "Fail x for i = " << i;
   }
 }
+
+TEST(CarStructure, exact_match) {
+  starmap::CarStructure car;
+  auto partname = car.find_semantic_part({0.16347528,  0.2507412 , -0.07981754});
+  ASSERT_EQ(partname, "right_back_wheel");
+
+  partname = car.find_semantic_part({-0.09472257, -0.07266671,  0.10419698});
+  ASSERT_EQ(partname, "upper_left_windshield");
+}
+
+TEST(CarStructure, approx_match) {
+  cv::Matx<float, 3, 1> pt {-0.09472257, -0.07266671,  0.10419698};
+  auto ptrn = pt + cv::Matx<float, 3, 1>::randn(0, 0.0001);
+  starmap::CarStructure car;
+  auto partname = car.find_semantic_part(pt.col(0));
+  ASSERT_EQ(partname, "upper_left_windshield");
+}

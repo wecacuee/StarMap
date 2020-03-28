@@ -2,6 +2,7 @@
 #include <tuple> // tuple, tie
 #include <cmath> // floor
 #include <algorithm> // max
+#include <unordered_map>
 #include <boost/range/counting_range.hpp>
 
 #include "starmap/starmap.h" // starmap
@@ -15,6 +16,48 @@ namespace starmap {
 using namespace std;
 using namespace cv;
 
+CarStructure::CarStructure() :
+    canonical_points_{
+                      -0.09472257, -0.07266671,  0.10419698,
+                      0.09396329, -0.07186594,  0.10468729,
+                      0.100639  , 0.26993483, 0.11144333,
+                      -0.100402 ,  0.2699945,  0.111474 ,
+                      -0.12014713, -0.40062513, -0.02047777,
+                      0.1201513 , -0.4005558 , -0.02116918,
+                      0.12190333, 0.40059162, 0.02385612,
+                      -0.12194733,  0.40059462,  0.02387712,
+                      -0.16116614, -0.2717491 , -0.07981283,
+                      -0.16382502,  0.25057048, -0.07948726,
+                      0.1615844 , -0.27168764, -0.07989835,
+                      0.16347528,  0.2507412 , -0.07981754 },
+    labels_{
+            "upper_left_windshield",
+            "upper_right_windshield",
+            "upper_right_rearwindow",
+            "upper_left_rearwindow",
+            "left_front_light",
+            "right_front_light",
+            "right_back_trunk",
+            "left_back_trunk",
+            "left_front_wheel",
+            "left_back_wheel",
+            "right_front_wheel",
+            "right_back_wheel"}
+  {
+  }
+
+  const std::string&
+      CarStructure::find_semantic_part(const cv::Matx<float, 3, 1>& cam_view_feat) {
+  Matx<float, 1, 3> cam_view_feat_mat(cam_view_feat.reshape<1, 3>());
+  Matx<float, 12, 1> distances;
+  for (int i = 0; i < canonical_points_.rows; ++i) {
+    distances(i, 0) = cv::norm((cam_view_feat_mat - canonical_points_.row(i)),
+                               cv::NORM_L2SQR);
+  }
+  float* it = std::min_element(distances.val, distances.val + 12);
+  size_t min_index = std::distance(distances.val, it);
+  return labels_[min_index];
+}
 
 double scale_for_crop(const Point2i& img_size,
                       const int desired_side)

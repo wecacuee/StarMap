@@ -35,6 +35,20 @@ std::vector<cv::Point2i> parse_heatmap(cv::Mat & det, const float thresh = 0.05)
 
  void visualize_keypoints(cv::Mat& vis, const Points& pts, const std::vector<cv::Vec3f>& colors);
 
+
+ /**
+  * Represents canonical semantic points of a car
+  */
+class CarStructure {
+public:
+  CarStructure();
+  const std::string& find_semantic_part(const cv::Matx<float, 3, 1>& cam_view_feat);
+
+protected:
+  const cv::Matx<float, 12, 3> canonical_points_;
+  const std::vector<std::string> labels_;
+};
+
 }
 
 #endif // STARMAP_STARMAP_H

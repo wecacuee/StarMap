@@ -19,9 +19,9 @@
 #include <message_filters/subscriber.h>
 #include <sort_ros/TrackedBoundingBoxes.h>
 #include <cv_bridge/cv_bridge.h>
-#include <starmap/SemanticKeypointWithCovariance.h>
-#include <starmap/TrackedBBoxListWithKeypoints.h>
-#include <starmap/TrackedBBoxWithKeypoints.h>
+#include <starmap_ros_msgs/SemanticKeypointWithCovariance.h>
+#include <starmap_ros_msgs/TrackedBBoxListWithKeypoints.h>
+#include <starmap_ros_msgs/TrackedBBoxWithKeypoints.h>
 #include <starmap/starmap.h>
 #include <boost/filesystem.hpp>
 #include <image_transport/subscriber_filter.h>
@@ -87,7 +87,7 @@ namespace starmap
     bbox_sub_.subscribe(nh, bbox_topic, 10);
     sub_.connectInput(image_sub_, bbox_sub_);
     sub_.registerCallback(std::bind(&Starmap::messageCb, this, sph::_1, sph::_2));
-    pub_ = private_nh.advertise<starmap::TrackedBBoxListWithKeypoints>(keypoint_topic, 10);
+    pub_ = private_nh.advertise<starmap_ros_msgs::TrackedBBoxListWithKeypoints>(keypoint_topic, 10);
 
     vis_ = image_trans_->advertise(visualization_topic, 10);
 
@@ -104,7 +104,7 @@ namespace starmap
   }
 
   void  visualize_all_bbox(cv::Mat& image,
-                           const TrackedBBoxListWithKeypointsConstPtr& bbox_with_kp_list)
+                           const starmap_ros_msgs::TrackedBBoxListWithKeypointsConstPtr& bbox_with_kp_list)
   {
     for (auto& bbox_with_kp : bbox_with_kp_list->bounding_boxes) {
       auto& bbox = bbox_with_kp.bbox;
@@ -141,13 +141,13 @@ namespace starmap
     bool visualize;
     private_nh.param<bool>("visualize", visualize, false);
     cv_bridge::CvImageConstPtr img = cv_bridge::toCvShare(message);
-    starmap::TrackedBBoxListWithKeypointsPtr bbox_with_kp_list =
-      boost::make_shared<starmap::TrackedBBoxListWithKeypoints>();
+    starmap_ros_msgs::TrackedBBoxListWithKeypointsPtr bbox_with_kp_list =
+      boost::make_shared<starmap_ros_msgs::TrackedBBoxListWithKeypoints>();
     bbox_with_kp_list->header.stamp = message->header.stamp;
     bbox_with_kp_list->header.frame_id = message->header.frame_id;
     for (auto& bbox: bboxes->bounding_boxes) {
       auto bbox_rect = safe_rect_bbox(bbox, img->image);
-      starmap::TrackedBBoxWithKeypoints bbox_with_kp;
+      starmap_ros_msgs::TrackedBBoxWithKeypoints bbox_with_kp;
       if (bbox_rect.area() >= 1) {
         auto bboxroi = img->image(bbox_rect);
         Points pts;
@@ -164,7 +164,7 @@ namespace starmap
         bbox_with_kp.bbox = bbox; // Duplicate information
         for (size_t i: boost::counting_range<size_t>(0, pts.size())) {
           auto& pt = pts[i];
-          starmap::SemanticKeypointWithCovariance kpt;
+          starmap_ros_msgs::SemanticKeypointWithCovariance kpt;
           kpt.x = pt.x;
           kpt.y = pt.y;
           kpt.cov.insert(kpt.cov.end(), {hm_list[i], 0, 0, hm_list[i]});
@@ -185,7 +185,7 @@ namespace starmap
 
   void timerCb(const ros::TimerEvent &) {
     cv::Mat vis;
-    starmap::TrackedBBoxListWithKeypointsConstPtr bbox_with_kp_list;
+    starmap_ros_msgs::TrackedBBoxListWithKeypointsConstPtr bbox_with_kp_list;
     {
       const std::lock_guard<std::mutex> lock(image_to_publish_mutex_);
       if ( ! input_img_bbox_queue_.empty()) {
@@ -218,7 +218,7 @@ namespace starmap
   torch::jit::script::Module model_;
   std::queue<std::tuple<
                cv::Mat,
-               starmap::TrackedBBoxListWithKeypointsConstPtr>
+               starmap_ros_msgs::TrackedBBoxListWithKeypointsConstPtr>
              > input_img_bbox_queue_;
   std::mutex image_to_publish_mutex_;
   int max_queue_size_ = 10;
