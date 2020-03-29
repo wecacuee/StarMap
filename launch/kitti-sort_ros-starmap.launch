@@ -2,25 +2,27 @@
 <launch>
   <arg name="rqt_view_sort_ros" default="true" />
   <arg name="rqt_view_starmap" default="true" />
+  <arg name="bagfile" default="$(find starmap)/data/arl/arl_husky_overpasscity.bag" />
   <node pkg="rosbag" type="play" name="rosbag"
-        args="--clock $(find starmap)/launch/arl_husky_overpasscity.bag" />
+        required="true"
+        args="--clock $(arg bagfile)" />
   <include file="$(find darknet_ros)/launch/darknet_ros.launch" >
     <arg name="image" value="/husky/camera/image_raw" />
-    <arg name="bounding_boxes" value="/darknet_ros/bounding_boxes_0" />
+    <arg name="bounding_boxes" value="/darknet_ros/bounding_boxes" />
   </include>
   <node pkg="nodelet" type="nodelet" name="orcvio_nodelet_manager"  args="manager" output="screen"/>
   <node pkg="nodelet" type="nodelet" name="sort_ros"
         args="load sort_ros/SortRos orcvio_nodelet_manager" >
     <param name="image_topic" value="/husky/camera/image_raw"/>
-    <param name="bbox_topic" value="/darknet_ros/bounding_boxes_0" />
-    <param name="tracked_bbox_topic" value="tracked_bounding_boxes_0" />
+    <param name="bbox_topic" value="/darknet_ros/bounding_boxes" />
+    <param name="tracked_bbox_topic" value="tracked_bounding_boxes" />
   </node>
   <node pkg="nodelet" type="nodelet" name="starmap"
         args="load starmap/Starmap orcvio_nodelet_manager"
         output="screen">
     <param name="image_topic" value="/husky/camera/image_raw" />
-    <param name="bbox_topic" value="/sort_ros/tracked_bounding_boxes_0" />
-    <param name="keypoint_topic" value="/starmap/keypoints_0" />
+    <param name="bbox_topic" value="/sort_ros/tracked_bounding_boxes" />
+    <param name="keypoint_topic" value="/starmap/keypoints" />
     <param name="starmap_model_path" value="$(find starmap)/models/model_cpu-jit.pth" />
     <param name="gpu_id" value="0" type="int" />
   </node>
@@ -42,4 +44,12 @@
     <param name="filename_format" value="/tmp/extract_images_starmap_%04d.jpg" />
     <param name="sec_per_frame" value="0.1"  />
   </node>
+  <node pkg="rosbag" type="record" name="bag_record"
+        args=" -O $(arg bagfile)_with_keypoinnts.bag
+              /darknet_ros/bounding_boxes
+              /sort_ros/tracked_bounding_boxes
+              /sort_ros/detection_image
+              /starmap/keypoints
+              /starmap/visualization/compressed
+              " />
 </launch>
