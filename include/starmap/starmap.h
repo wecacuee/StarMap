@@ -36,7 +36,9 @@ std::tuple<cv::Mat, cv::Mat, cv::Mat>
 
 std::vector<cv::Point2i> parse_heatmap(cv::Mat & det, const float thresh = 0.05);
 
- void visualize_keypoints(cv::Mat& vis, const Points& pts, const std::vector<std::string>& label_list);
+ void visualize_keypoints(cv::Mat& vis, const Points& pts, const
+                          std::vector<std::string>& label_list,
+                          bool draw_labels = false);
 
 
  /**

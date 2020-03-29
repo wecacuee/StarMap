@@ -1,8 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <launch>
-  <arg name="rqt_view_sort_ros" default="false" />
-  <arg name="extract_imgs_sort_ros" default="true" />
-  <node pkg="rosbag" type="play" name="rosbag" args="--clock $(find starmap)/launch/arl_husky_floodedgrounds.bag" />
+  <arg name="rqt_view_sort_ros" default="true" />
+  <arg name="rqt_view_starmap" default="true" />
+  <node pkg="rosbag" type="play" name="rosbag"
+        args="--clock $(find starmap)/launch/arl_husky_overpasscity.bag" />
   <include file="$(find darknet_ros)/launch/darknet_ros.launch" >
     <arg name="image" value="/husky/camera/image_raw" />
     <arg name="bounding_boxes" value="/darknet_ros/bounding_boxes_0" />
@@ -26,18 +27,19 @@
   <node pkg="rqt_image_view" type="rqt_image_view" name="rqt_image_view_det"
         args=" /sort_ros/detection_image"
         if="$(arg rqt_view_sort_ros)"/>
-  <!--node pkg="rqt_image_view" type="rqt_image_view" name="rqt_image_view_vis"
-       args=" /starmap/visualization"/--> 
+  <node pkg="rqt_image_view" type="rqt_image_view" name="rqt_image_view_vis"
+        args=" /starmap/visualization"
+        if="$(arg rqt_view_starmap)" /> 
   <node pkg="image_view" type="extract_images" name="extract_images_sort_ros"
-        if="$(arg extract_imgs_sort_ros)">
+        unless="$(arg rqt_view_sort_ros)">
     <remap from="image" to="/sort_ros/detection_image" />
     <param name="filename_format" value="/tmp/extract_images_sort_ros_%04d.jpg" />
     <param name="sec_per_frame" value="0.1"  />
   </node>
-  <!-- node pkg="image_view" type="extract_images" name="extract_images_starmap" >
+  <node pkg="image_view" type="extract_images" name="extract_images_starmap"
+        unless="$(arg rqt_view_starmap)" >
     <remap from="image" to="/starmap/visualization" />
     <param name="filename_format" value="/tmp/extract_images_starmap_%04d.jpg" />
     <param name="sec_per_frame" value="0.1"  />
-  </node -->
-
+  </node>
 </launch>

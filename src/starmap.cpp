@@ -353,16 +353,18 @@ vector<Point2i> run_starmap_on_img(const string& starmap_filepath,
     return pts;
 }
 
-void visualize_keypoints(Mat& vis, const Points& pts, const vector<string>& label_list) {
+void visualize_keypoints(Mat& vis, const Points& pts, const vector<string>& label_list,
+                         bool draw_labels) {
   for (int i: boost::counting_range<size_t>(0, pts.size())) {
     auto& pt4 = pts[i];
     auto& col = GLOBAL_CAR_STRUCTURE.get_label_color(label_list[i]);
     circle(vis, pt4, 4, Scalar(255, 255, 255), -1);
     circle(vis, pt4, 2, col, -1);
-    putText(vis, label_list[i], pt4,
-            cv::FONT_HERSHEY_SIMPLEX,
-            std::max(0.8, 0.01 * vis.rows),
-            col, 2);
+    if (draw_labels)
+      putText(vis, label_list[i], pt4,
+              cv::FONT_HERSHEY_SIMPLEX,
+              /*fontSize=*/std::max(0.4, 0.01 * vis.rows),
+              /*color=*/col, /*lineThickness=*/1);
   }
 }
 

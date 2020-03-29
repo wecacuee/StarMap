@@ -110,8 +110,8 @@ namespace starmap
       cv::putText(image, (format("id: %d") % bbox.id).str(),
                   {bbox_rect.x, bbox_rect.y},
                   cv::FONT_HERSHEY_SIMPLEX,
-                  std::max(0.8, 4.0 * bbox_rect.height / image.rows),
-                  color, 2);
+                  std::max(0.4, 2.0 * bbox_rect.height / image.rows),
+                  color, 1);
       auto bboxroi = image(bbox_rect);
       Points pts;
       std::vector<string> label_list;
@@ -119,7 +119,7 @@ namespace starmap
         pts.emplace_back(semkp.x, semkp.y);
         label_list.emplace_back(semkp.semantic_part_label_name);
       }
-      starmap::visualize_keypoints(bboxroi, pts, label_list);
+      starmap::visualize_keypoints(bboxroi, pts, label_list, true);
     }
   }
 
