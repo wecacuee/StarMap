@@ -4,6 +4,7 @@
 #include <algorithm> // max
 #include <unordered_map>
 #include <boost/range/counting_range.hpp>
+#include <boost/format.hpp>
 
 #include "starmap/starmap.h" // starmap
 #include "opencv2/opencv.hpp" // cv::*
@@ -15,6 +16,7 @@ namespace starmap {
 
 using namespace std;
 using namespace cv;
+using boost::format;
 
 CarStructure::CarStructure() :
     canonical_points_{
@@ -42,12 +44,26 @@ CarStructure::CarStructure() :
             "left_front_wheel",
             "left_back_wheel",
             "right_front_wheel",
-            "right_back_wheel"}
+            "right_back_wheel"},
+    colors_{0, 0, 0,
+            0, 0, 128,
+            0, 0, 255,
+            0, 128, 0,
+            0, 128, 128,
+            0, 128, 255,
+            0, 255, 0,
+            0, 255, 128,
+            0, 255, 255,
+            255, 0, 0,
+            255, 0, 128,
+            255, 0, 255}
   {
   }
 
-  const std::string&
-      CarStructure::find_semantic_part(const cv::Matx<float, 3, 1>& cam_view_feat) {
+
+const std::string&
+  CarStructure::find_semantic_part(const cv::Matx<float, 3, 1>& cam_view_feat) const
+{
   Matx<float, 1, 3> cam_view_feat_mat(cam_view_feat.reshape<1, 3>());
   Matx<float, 12, 1> distances;
   for (int i = 0; i < canonical_points_.rows; ++i) {
@@ -58,6 +74,22 @@ CarStructure::CarStructure() :
   size_t min_index = std::distance(distances.val, it);
   return labels_[min_index];
 }
+
+const cv::Scalar
+  CarStructure::get_label_color(const std::string& label) const
+{
+  auto col = colors_.row(get_label_index(label));
+  return cv::Scalar(col(0,0), col(1,0), col(2,0));
+}
+
+
+const size_t
+  CarStructure::get_label_index(const std::string& label) const
+{
+  auto it = std::find(labels_.begin(), labels_.end(), label);
+  return std::distance(labels_.begin(), it);
+}
+
 
 double scale_for_crop(const Point2i& img_size,
                       const int desired_side)
@@ -225,7 +257,7 @@ tuple<Mat, Mat, Mat>
 }
 
 
-tuple<Points, vector<Vec3f>, vector<float>, vector<float>>
+tuple<Points, vector<string>, vector<float>, vector<float>>
    find_semantic_keypoints_prob_depth(torch::jit::script::Module model,
                                       const Mat& img,
                                       const int input_res,
@@ -249,6 +281,12 @@ tuple<Points, vector<Vec3f>, vector<float>, vector<float>>
     hm_list.push_back(hm00.at<float>(pt.y, pt.x));
   }
 
+  vector<string> label_list;
+  transform(xyz_list.begin(), xyz_list.end(),
+            std::back_inserter(label_list),
+            std::bind(&CarStructure::find_semantic_part,
+                      GLOBAL_CAR_STRUCTURE, std::placeholders::_1));
+
   if (visualize) {
     Mat star;
     resize(hm00 * 255, star, {img_cropped.size[0], img_cropped.size[1]});
@@ -264,15 +302,29 @@ tuple<Points, vector<Vec3f>, vector<float>, vector<float>>
   auto pts_old_kp = convert_to_precrop(pts, {img.size[1], img.size[0]}, input_res,
                                        /*addnl_scale_factor=*/ADDNL_SCALE_FACTOR);
 
-  return make_tuple(pts_old_kp, xyz_list, depth_list, hm_list);
+  return make_tuple(pts_old_kp, label_list, depth_list, hm_list);
+}
+
+
+torch::jit::script::Module
+  model_load(const std::string& starmap_filepath,
+             const int gpu_id)
+{
+  // model = torch.load(opt.loadModel)
+  auto model = torch::jit::load(starmap_filepath);
+  torch::DeviceType device_type = gpu_id >= 0 ? torch::DeviceType::CUDA : torch::DeviceType::CPU;
+  int device_id = gpu_id >= 0 ? gpu_id : 0;
+  torch::Device device = torch::Device(device_type, gpu_id);
+  model.to(device);
+  return model;
 }
 
 
 vector<Point2i> run_starmap_on_img(const string& starmap_filepath,
-                                            const string& img_filepath,
-                                            const int input_res,
-                                            const int gpu_id,
-                                            const bool visualize)
+                                   const string& img_filepath,
+                                   const int input_res,
+                                   const int gpu_id,
+                                   const bool visualize)
 {
     gsl_Expects(input_res > 0);
 
@@ -282,23 +334,18 @@ vector<Point2i> run_starmap_on_img(const string& starmap_filepath,
     Mat imgfloat;
     img.convertTo(imgfloat, CV_32FC3, 1/255.0);
 
-    // model = torch.load(opt.loadModel)
-    auto model = torch::jit::load(starmap_filepath);
-    torch::DeviceType device_type = gpu_id >= 0 ? torch::DeviceType::CUDA : torch::DeviceType::CPU;
-    int device_id = gpu_id >= 0 ? gpu_id : 0;
-    torch::Device device = torch::Device(device_type, gpu_id);
-    model.to(device);
+    auto model = model_load(starmap_filepath, gpu_id);
 
     Points pts;
-    vector<Vec3f> xyz_list;
+    vector<string> label_list;
     vector<float> depth_list;
     vector<float> hm_list;
-    tie(pts, xyz_list, depth_list, hm_list) =
+    tie(pts, label_list, depth_list, hm_list) =
       find_semantic_keypoints_prob_depth(model, imgfloat, input_res, visualize);
 
     if (visualize) {
       auto vis = img;
-      visualize_keypoints(vis, pts, xyz_list);
+      visualize_keypoints(vis, pts, label_list);
       imshow("vis", vis);
       waitKey(-1);
     }
@@ -306,12 +353,16 @@ vector<Point2i> run_starmap_on_img(const string& starmap_filepath,
     return pts;
 }
 
-void visualize_keypoints(Mat& vis, const Points& pts, const vector<Vec3f>& colors) {
+void visualize_keypoints(Mat& vis, const Points& pts, const vector<string>& label_list) {
   for (int i: boost::counting_range<size_t>(0, pts.size())) {
     auto& pt4 = pts[i];
-    auto& col = colors[i];
+    auto& col = GLOBAL_CAR_STRUCTURE.get_label_color(label_list[i]);
     circle(vis, pt4, 4, Scalar(255, 255, 255), -1);
-    circle(vis, pt4, 2, Scalar(col[0], col[1], col[2]), -1);
+    circle(vis, pt4, 2, col, -1);
+    putText(vis, label_list[i] pt4,
+            cv::FONT_HERSHEY_SIMPLEX,
+            std::max(0.8, 0.01 * image.rows),
+            col, 2);
   }
 }
 

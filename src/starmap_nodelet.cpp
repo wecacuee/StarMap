@@ -72,21 +72,14 @@ namespace starmap
     timer_ = nh.createTimer(ros::Duration(0.05),
                             std::bind(& Starmap::timerCb, this, sph::_1));
 
-    // model = torch.load(opt.loadModel)
-    NODELET_DEBUG("Loading  model from %s", starmap_model_path.c_str());
-    model_ = torch::jit::load(starmap_model_path);
-    NODELET_DEBUG("gpu_id : %d", gpu_id);
-    torch::DeviceType device_type = gpu_id >= 0 ? torch::DeviceType::CUDA : torch::DeviceType::CPU;
-    int device_id = gpu_id >= 0 ? gpu_id : 0;
-    torch::Device device = torch::Device(device_type, gpu_id);
-    model_.to(device);
+    auto model = starmap::model_load(starmap_model_path, gpu_id);
 
     NODELET_DEBUG("Subscribing to %s", image_topic.c_str());
     image_trans_ = make_unique<image_transport::ImageTransport>(private_nh);
     image_sub_.subscribe(nh, image_topic, 10);
     bbox_sub_.subscribe(nh, bbox_topic, 10);
     sub_.connectInput(image_sub_, bbox_sub_);
-    sub_.registerCallback(std::bind(&Starmap::messageCb, this, sph::_1, sph::_2));
+    sub_.registerCallback(std::bind(&Starmap::messageCb, this, model, sph::_1, sph::_2));
     pub_ = private_nh.advertise<starmap_ros_msgs::TrackedBBoxListWithKeypoints>(keypoint_topic, 10);
 
     vis_ = image_trans_->advertise(visualization_topic, 10);
@@ -121,18 +114,19 @@ namespace starmap
                   color, 2);
       auto bboxroi = image(bbox_rect);
       Points pts;
-      std::vector<cv::Vec3f> colors;
+      std::vector<string> label_list;
       for (auto& semkp: bbox_with_kp.keypoints) {
         pts.emplace_back(semkp.x, semkp.y);
-        colors.emplace_back(semkp.cov[0], semkp.cov[0]);
+        label_list.emplace_back(semkp.semantic_part_label_name);
       }
-      starmap::visualize_keypoints(bboxroi, pts, colors);
+      starmap::visualize_keypoints(bboxroi, pts, label_list);
     }
   }
 
 
   // must use a ConstPtr callback to use zero-copy transport
-  void messageCb(const sensor_msgs::ImageConstPtr& message,
+  void messageCb(torch::jit::script::Module model,
+                 const sensor_msgs::ImageConstPtr& message,
                  const sort_ros::TrackedBoundingBoxesConstPtr& bboxes) {
     NODELET_DEBUG("Callback called ... ");
     auto private_nh = getPrivateNodeHandle();
@@ -151,14 +145,14 @@ namespace starmap
       if (bbox_rect.area() >= 1) {
         auto bboxroi = img->image(bbox_rect);
         Points pts;
-        vector<Vec3f> xyz_list;
+        vector<string> label_list;
         vector<float> depth_list;
         vector<float> hm_list;
         Mat bboxfloat;
         bboxroi.convertTo(bboxfloat, CV_32FC3, 1/255.0);
         NODELET_DEBUG("Calling  model ... ");
-        tie(pts, xyz_list, depth_list, hm_list) =
-          find_semantic_keypoints_prob_depth(model_, bboxfloat, input_res,
+        tie(pts, label_list, depth_list, hm_list) =
+          find_semantic_keypoints_prob_depth(model, bboxfloat, input_res,
                                             /*visualize=*/visualize);
 
         bbox_with_kp.bbox = bbox; // Duplicate information
@@ -168,6 +162,9 @@ namespace starmap
           kpt.x = pt.x;
           kpt.y = pt.y;
           kpt.cov.insert(kpt.cov.end(), {hm_list[i], 0, 0, hm_list[i]});
+          kpt.semantic_part_label_name = label_list[i];
+          kpt.semantic_part_label =
+            starmap::GLOBAL_CAR_STRUCTURE.get_label_index(label_list[i]);
           bbox_with_kp.keypoints.push_back(kpt);
         }
       }
@@ -215,7 +212,6 @@ namespace starmap
   image_transport::Publisher vis_;
   std::unique_ptr<image_transport::ImageTransport> image_trans_;
   ros::Timer timer_;
-  torch::jit::script::Module model_;
   std::queue<std::tuple<
                cv::Mat,
                starmap_ros_msgs::TrackedBBoxListWithKeypointsConstPtr>

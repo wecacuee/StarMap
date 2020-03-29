@@ -111,7 +111,6 @@ TEST(CarStructure, exact_match) {
 TEST(CarStructure, approx_match) {
   cv::Matx<float, 3, 1> pt {-0.09472257, -0.07266671,  0.10419698};
   auto ptrn = pt + cv::Matx<float, 3, 1>::randn(0, 0.0001);
-  starmap::CarStructure car;
-  auto partname = car.find_semantic_part(pt.col(0));
+  auto partname = starmap::GLOBAL_CAR_STRUCTURE.find_semantic_part(pt.col(0));
   ASSERT_EQ(partname, "upper_left_windshield");
 }
