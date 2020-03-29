@@ -359,9 +359,9 @@ void visualize_keypoints(Mat& vis, const Points& pts, const vector<string>& labe
     auto& col = GLOBAL_CAR_STRUCTURE.get_label_color(label_list[i]);
     circle(vis, pt4, 4, Scalar(255, 255, 255), -1);
     circle(vis, pt4, 2, col, -1);
-    putText(vis, label_list[i] pt4,
+    putText(vis, label_list[i], pt4,
             cv::FONT_HERSHEY_SIMPLEX,
-            std::max(0.8, 0.01 * image.rows),
+            std::max(0.8, 0.01 * vis.rows),
             col, 2);
   }
 }
