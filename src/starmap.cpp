@@ -12,11 +12,39 @@
 #include "gsl/gsl-lite.hpp" // gsl::*
 #include "torch/script.h"
 
-namespace starmap {
 
-using namespace std;
-using namespace cv;
+using std::vector;
+using std::string;
+using std::unordered_map;
+using std::cout;
+using std::tuple;
+using std::tie;
+using std::max;
+using std::make_tuple;
+using std::swap;
+using cv::Mat;
+using cv::Matx;
+using cv::Scalar;
+using cv::circle;
+using cv::imread;
+using cv::imwrite;
+using cv::imshow;
+using cv::waitKey;
+using cv::IMREAD_COLOR;
+using cv::findNonZero;
+using cv::Point2i;
+using cv::Point2f;
+using cv::Point3f;
+using cv::Vec3f;
+using cv::Rect;
+using cv::Rect2f;
+using cv::Range;
+using cv::Size;
+using cv::cvtColor;
+using cv::COLOR_GRAY2BGR;
 using boost::format;
+
+namespace starmap {
 
 CarStructure::CarStructure() :
     canonical_points_{
@@ -256,12 +284,40 @@ tuple<Mat, Mat, Mat>
   return make_tuple(cvout.clone(), xyz.clone(), depth.clone());
 }
 
+template<typename T, typename T2>
+vector<T>
+mean_grouped_by(vector<T2> const& key_vect, vector<T> const& value_vec,
+                T const& zero)
+{
+  size_t idx;
+  unordered_map<T2, vector<size_t>> label2idx;
+  for (auto const& label : key_vect) {
+    if (label2idx.count(label)) {
+      label2idx.at(label).push_back(++idx);
+    } else {
+      vector<size_t> indices({idx});
+      label2idx[label] = indices;
+    }
+  }
+  vector<T> value_uniq;
+
+  for (auto const& keyval: label2idx) {
+    T value_mean = std::accumulate(value_vec.begin(), value_vec.end(), zero);
+    if (keyval.second.size()) {
+      float ksize = keyval.second.size();
+      value_uniq.emplace_back(value_mean / ksize);
+    }
+  }
+  return value_uniq;
+}
+
 
 tuple<Points, vector<string>, vector<float>, vector<float>>
    find_semantic_keypoints_prob_depth(torch::jit::script::Module model,
                                       const Mat& img,
                                       const int input_res,
-                                      const bool visualize)
+                                      const bool visualize,
+                                      const bool unique_labels)
 {
   const int ADDNL_SCALE_FACTOR = 4;
   // img2 = Crop(img, center, scale, input_res) / 256.;
@@ -286,6 +342,15 @@ tuple<Points, vector<string>, vector<float>, vector<float>>
             std::back_inserter(label_list),
             std::bind(&CarStructure::find_semantic_part,
                       GLOBAL_CAR_STRUCTURE, std::placeholders::_1));
+
+  if (unique_labels) {
+    Point2i zero(0, 0);
+    Points pts_uniq = mean_grouped_by(label_list, pts, zero);
+    Vec3f z(0, 0, 0);
+    vector<Vec3f> xyz_uniq = mean_grouped_by(label_list, xyz_list, z);
+    vector<float> depth_uniq = mean_grouped_by(label_list, depth_list, 0.0f);
+    vector<float> hm_uniq = mean_grouped_by(label_list, hm_list, 0.0f);
+  }
 
   if (visualize) {
     Mat star;
@@ -358,8 +423,8 @@ void visualize_keypoints(Mat& vis, const Points& pts, const vector<string>& labe
   for (int i: boost::counting_range<size_t>(0, pts.size())) {
     auto& pt4 = pts[i];
     auto& col = GLOBAL_CAR_STRUCTURE.get_label_color(label_list[i]);
-    circle(vis, pt4, 4, Scalar(255, 255, 255), -1);
-    circle(vis, pt4, 2, col, -1);
+    circle(vis, pt4, 2, Scalar(255, 255, 255), -1);
+    circle(vis, pt4, 1, col, -1);
     if (draw_labels)
       putText(vis, label_list[i], pt4,
               cv::FONT_HERSHEY_SIMPLEX,

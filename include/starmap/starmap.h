@@ -23,7 +23,8 @@ std::tuple<Points, std::vector<std::string>, std::vector<float>, std::vector<flo
  find_semantic_keypoints_prob_depth(torch::jit::script::Module model,
                                     const cv::Mat& img,
                                     const int input_res,
-                                    const bool visualize);
+                                    const bool visualize,
+                                    const bool unique_labels = true);
 
 cv::Mat nms(const cv::Mat& det, const int size = 3);
 

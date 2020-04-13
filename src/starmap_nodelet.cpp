@@ -99,6 +99,8 @@ namespace starmap
   void  visualize_all_bbox(cv::Mat& image,
                            const starmap_ros_msgs::TrackedBBoxListWithKeypointsConstPtr& bbox_with_kp_list)
   {
+    std::vector<cv::Point2i> all_points;
+    std::vector<string> all_label_list;
     for (auto& bbox_with_kp : bbox_with_kp_list->bounding_boxes) {
       auto& bbox = bbox_with_kp.bbox;
       auto bbox_rect = safe_rect_bbox(bbox_with_kp.bbox, image);
@@ -116,11 +118,18 @@ namespace starmap
       Points pts;
       std::vector<string> label_list;
       for (auto& semkp: bbox_with_kp.keypoints) {
-        pts.emplace_back(semkp.x, semkp.y);
+        cv::Point2i pti(semkp.x, semkp.y);
+        pts.emplace_back(pti);
         label_list.emplace_back(semkp.semantic_part_label_name);
+
+        cv::Point2i gkp = pti + cv::Point2i(bbox_rect.x, bbox_rect.y);
+        all_points.emplace_back(gkp.x, gkp.y);
+        all_label_list.emplace_back(semkp.semantic_part_label_name);
       }
-      starmap::visualize_keypoints(bboxroi, pts, label_list, true);
+      // starmap::visualize_keypoints(bboxroi, pts, label_list, /*draw_labels=*/false);
+
     }
+    starmap::visualize_keypoints(image, all_points, all_label_list, /*draw_labels=*/false);
   }
 
 

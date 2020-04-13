@@ -2,11 +2,12 @@
 <launch>
   <arg name="nodelet_manager" default="orcvio_nodelet_manager" />
   <node pkg="nodelet" type="nodelet" name="starmap"
-        args="load starmap/Starmap $(arg nodelet_manager)" >
+        args="standalone starmap/Starmap"
+        launch-prefix="xterm -e gdb -ex run -args "
         output="screen">
-    <param name="image_topic" value="image_raw_0" />
-    <param name="bbox_topic" value="sort_ros/tracked_bounding_boxes_0" />
-    <param name="keypoint_topic" value="keypoints_0" />
+    <param name="image_topic" value="/husky/camera/image_raw" />
+    <param name="bbox_topic" value="/sort_ros/tracked_bounding_boxes" />
+    <param name="keypoint_topic" value="/starmap/keypoints" />
     <param name="starmap_model_path" value="$(find starmap)/models/model_cpu-jit.pth" />
     <param name="gpu_id" value="0" type="int" />
     <param name="visualize" value="false" type="bool" />
