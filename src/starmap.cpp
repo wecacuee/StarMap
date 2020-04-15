@@ -359,12 +359,10 @@ vector<SemanticKeypoint>
   for (size_t i = 0; i < pts_old_kp.size(); i++) {
     semkp_list[i].pos2d = pts_old_kp[i];
   }
-  std::ostream_iterator<SemanticKeypoint> out(std::cout, "\n ");
-  std::copy(semkp_list.begin(), semkp_list.end(), out);
+
   if (unique_labels) {
     semkp_list = mean_grouped_by_label(semkp_list);
   }
-  std::copy(semkp_list.begin(), semkp_list.end(), out);
 
   return semkp_list;
 }
