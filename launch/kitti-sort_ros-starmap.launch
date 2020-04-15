@@ -1,9 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <launch>
-  <arg name="rqt_view_sort_ros" default="false" />
+  <arg name="rqt_view_sort_ros" default="true" />
   <arg name="rqt_view_starmap" default="false" />
-  <arg name="bagfile" default="$(find starmap)/data/arl/arl_husky_overpasscity.bag" />
-  <arg name="outdata_dir" default="$(find starmap)/data/arl/arl_husky_overpasscity/" />
+  <arg name="bagfile_basename" default="$(find starmap)/data/arl/arl_husky_overpasscity_onecar_b1" />
+  <arg name="bagfile" default="$(arg bagfile_basename).bag" />
+  <arg name="outdata_dir" default="$(arg bagfile_basename)/" />
   <arg name="record_rosbag" default="true" />
   <arg name="starmap_debug" default="false" />
   <node pkg="rosbag" type="play" name="rosbag"
@@ -51,7 +52,7 @@
     <param name="sec_per_frame" value="0.1"  />
   </node>
   <node if="$(arg record_rosbag)" pkg="rosbag" type="record" name="bag_record"
-        args=" -O $(arg bagfile)_with_keypoints.bag
+    args=" -O $(arg outdata_dir)/with_keypoints.bag
               /husky/camera/image_raw
               /husky/imu
               /husky/camera/detection
