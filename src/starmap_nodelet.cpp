@@ -99,8 +99,7 @@ namespace starmap
   void  visualize_all_bbox(cv::Mat& image,
                            const starmap_ros_msgs::TrackedBBoxListWithKeypointsConstPtr& bbox_with_kp_list)
   {
-    std::vector<cv::Point2i> all_points;
-    std::vector<string> all_label_list;
+    std::vector<SemanticKeypoint> all_semkp_list;
     for (auto& bbox_with_kp : bbox_with_kp_list->bounding_boxes) {
       auto& bbox = bbox_with_kp.bbox;
       auto bbox_rect = safe_rect_bbox(bbox_with_kp.bbox, image);
@@ -123,8 +122,10 @@ namespace starmap
         label_list.emplace_back(semkp.semantic_part_label_name);
 
         cv::Point2i gkp = pti + cv::Point2i(bbox_rect.x, bbox_rect.y);
-        all_points.emplace_back(gkp.x, gkp.y);
-        all_label_list.emplace_back(semkp.semantic_part_label_name);
+        SemanticKeypoint skp;
+        skp.pos2d = gkp;
+        skp.label = semkp.semantic_part_label_name;
+        all_semkp_list.push_back(skp);
       }
       // starmap::visualize_keypoints(bboxroi, pts, label_list, /*draw_labels=*/false);
 
@@ -132,7 +133,7 @@ namespace starmap
     auto private_nh = getPrivateNodeHandle();
     bool draw_labels;
     private_nh.param("draw_labels", draw_labels, true);
-    starmap::visualize_keypoints(image, all_points, all_label_list, /*draw_labels=*/draw_labels);
+    starmap::visualize_keypoints(image, all_semkp_list, /*draw_labels=*/draw_labels);
   }
 
 
@@ -156,27 +157,23 @@ namespace starmap
       starmap_ros_msgs::TrackedBBoxWithKeypoints bbox_with_kp;
       if (bbox_rect.area() >= 1) {
         auto bboxroi = img->image(bbox_rect);
-        Points pts;
-        vector<string> label_list;
-        vector<float> depth_list;
-        vector<float> hm_list;
         Mat bboxfloat;
         bboxroi.convertTo(bboxfloat, CV_32FC3, 1/255.0);
         NODELET_DEBUG("Calling  model ... ");
-        tie(pts, label_list, depth_list, hm_list) =
+        vector<SemanticKeypoint> semkp_list =
           find_semantic_keypoints_prob_depth(model, bboxfloat, input_res,
                                             /*visualize=*/visualize);
 
         bbox_with_kp.bbox = bbox; // Duplicate information
-        for (size_t i: boost::counting_range<size_t>(0, pts.size())) {
-          auto& pt = pts[i];
+        for (auto const& semkp: semkp_list) {
+          auto& pt = semkp.pos2d;
           starmap_ros_msgs::SemanticKeypointWithCovariance kpt;
           kpt.x = pt.x;
           kpt.y = pt.y;
-          kpt.cov.insert(kpt.cov.end(), {hm_list[i], 0, 0, hm_list[i]});
-          kpt.semantic_part_label_name = label_list[i];
+          kpt.cov.insert(kpt.cov.end(), {semkp.hm, 0, 0, semkp.hm});
+          kpt.semantic_part_label_name = semkp.label;
           kpt.semantic_part_label =
-            starmap::GLOBAL_CAR_STRUCTURE.get_label_index(label_list[i]);
+            starmap::GLOBAL_CAR_STRUCTURE.get_label_index(semkp.label);
           bbox_with_kp.keypoints.push_back(kpt);
         }
       }

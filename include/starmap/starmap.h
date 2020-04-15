@@ -19,7 +19,67 @@ Points run_starmap_on_img(const std::string& starmap_filepath,
                           const int gpu_id,
                           const bool visualize = true);
 
-std::tuple<Points, std::vector<std::string>, std::vector<float>, std::vector<float>>
+
+struct SemanticKeypoint {
+  SemanticKeypoint(cv::Point2i p,
+                   cv::Vec3f x,
+                  float d,
+                  float h,
+                  std::string l)
+    : pos2d(p),
+    xyz(x),
+    depth(d),
+    hm(h),
+    label(l)
+  {}
+
+  SemanticKeypoint()
+    : pos2d{0, 0},
+    xyz{0, 0, 0},
+    depth(0),
+    hm(0),
+    label("")
+  {}
+
+  static SemanticKeypoint Zero() {
+    SemanticKeypoint z;
+    return z;
+  }
+
+
+  SemanticKeypoint operator+ (const SemanticKeypoint& other) const {
+    if ( (other.label != "") && (label != "") && label != other.label ) {
+      throw std::runtime_error("label must be the same got: " + label + " other: " + other.label);
+    }
+    SemanticKeypoint sum(pos2d + other.pos2d,
+                         xyz + other.xyz,
+                         depth + other.depth,
+                         (hm + other.hm) / 2.0,
+                         (label == "") ? other.label : label);
+    return sum;
+  }
+
+  SemanticKeypoint operator/ (const float div) const {
+    SemanticKeypoint q(pos2d / div,
+                       xyz / div,
+                       depth / div,
+                       hm,
+                       label);
+    return q;
+  }
+
+  cv::Point2i pos2d;
+  cv::Vec3f xyz;
+  float depth;
+  float hm;
+  std::string label;
+};
+
+std::ostream& operator<< (std::ostream& o, const SemanticKeypoint& semkp);
+
+
+//std::tuple<Points, std::vector<std::string>, std::vector<float>, std::vector<float>>
+std::vector<SemanticKeypoint>
  find_semantic_keypoints_prob_depth(torch::jit::script::Module model,
                                     const cv::Mat& img,
                                     const int input_res,
@@ -37,8 +97,8 @@ std::tuple<cv::Mat, cv::Mat, cv::Mat>
 
 std::vector<cv::Point2i> parse_heatmap(cv::Mat & det, const float thresh = 0.05);
 
- void visualize_keypoints(cv::Mat& vis, const Points& pts, const
-                          std::vector<std::string>& label_list,
+ void visualize_keypoints(cv::Mat& vis,
+                          const std::vector<SemanticKeypoint>& semkp_list,
                           bool draw_labels = false);
 
 
@@ -60,7 +120,6 @@ protected:
 };
 
 static const CarStructure GLOBAL_CAR_STRUCTURE;
-
 
 }
 

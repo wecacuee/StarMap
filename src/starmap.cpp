@@ -229,7 +229,7 @@ vector<Point2i>
   det.setTo(0, mask);
   Mat pooled = nms(det);
   vector<Point2i> pts;
-  findNonZero(pooled > 0, pts);
+  findNonZero(pooled > thresh, pts);
   return pts;
 }
 
@@ -276,35 +276,34 @@ tuple<Mat, Mat, Mat>
   Mat cvout = tensorToMat(heatmap[0][0]);
   auto heatmap1to3 = at::slice(heatmap[0], /*dim=*/0, /*start=*/1, /*end=*/4);
   heatmap1to3 = heatmap1to3.permute({ 1, 2, 0}); // CWH -> WHC
-  Mat xyz = tensorToMat(heatmap1to3 * imgfloat.size[0]);
-  Mat depth = tensorToMat(heatmap[0][4] * imgfloat.size[0]);
+  Mat xyz = tensorToMat(heatmap1to3);
+  Mat depth = tensorToMat(heatmap[0][4]);
   gsl_Ensures(cvout.type() == CV_32FC1);
   gsl_Ensures(xyz.type() == CV_32FC3);
   gsl_Ensures(depth.type() == CV_32FC1);
   return make_tuple(cvout.clone(), xyz.clone(), depth.clone());
 }
 
-template<typename K, typename V>
-vector<V>
-mean_grouped_by(vector<K> const& key_vect, vector<V> const& value_vec,
-                V const& zero)
+vector<SemanticKeypoint>
+mean_grouped_by_label(vector<SemanticKeypoint> const& semkp_list)
 {
-  unordered_map<K, vector<V>> label2idx;
-  for (size_t idx = 0; idx < key_vect.size(); idx ++) {
-    K const& label = key_vect[idx];
-    V const& val = value_vec[idx];
+  unordered_map<string, vector<SemanticKeypoint>> label2idx;
+  for (size_t idx = 0; idx < semkp_list.size(); idx ++) {
+    SemanticKeypoint const& semkp = semkp_list[idx];
+    string const& label = semkp.label;
     if (label2idx.count(label)) {
-      label2idx.at(label).push_back(val);
+      label2idx.at(label).push_back(semkp);
     } else {
-      vector<V> values({val});
+      vector<SemanticKeypoint> values({semkp});
       label2idx[label] = values;
     }
   }
 
-  vector<V> value_uniq;
+  vector<SemanticKeypoint> value_uniq;
   for (auto const& keyval: label2idx) {
-    vector<V> values = keyval.second;
-    V value_mean = std::accumulate(values.begin(), values.end(), zero);
+    vector<SemanticKeypoint> values = keyval.second;
+    SemanticKeypoint value_mean = std::accumulate(values.begin(), values.end(),
+                                                  SemanticKeypoint::Zero());
     float ksize = values.size();
     if (ksize) {
       value_uniq.emplace_back(value_mean / ksize);
@@ -314,7 +313,8 @@ mean_grouped_by(vector<K> const& key_vect, vector<V> const& value_vec,
 }
 
 
-tuple<Points, vector<string>, vector<float>, vector<float>>
+//tuple<Points, vector<string>, vector<float>, vector<float>>
+vector<SemanticKeypoint>
    find_semantic_keypoints_prob_depth(torch::jit::script::Module model,
                                       const Mat& img,
                                       const int input_res,
@@ -329,30 +329,6 @@ tuple<Points, vector<string>, vector<float>, vector<float>>
   Mat hm00, xyz, depth;
   tie(hm00, xyz, depth)  = model_forward(model, img_cropped);
   auto pts = parse_heatmap(hm00, 0.1);
-  vector<Vec3f> xyz_list;
-  vector<float> depth_list;
-  vector<float> hm_list;
-  for (auto& pt: pts) {
-    Point3f xyz_at = xyz.at<Point3f>(pt.y, pt.x);
-    xyz_list.emplace_back(xyz_at.x, xyz_at.y, xyz_at.z);
-    depth_list.push_back(depth.at<float>(pt.y, pt.x));
-    hm_list.push_back(hm00.at<float>(pt.y, pt.x));
-  }
-
-  vector<string> label_list;
-  transform(xyz_list.begin(), xyz_list.end(),
-            std::back_inserter(label_list),
-            std::bind(&CarStructure::find_semantic_part,
-                      GLOBAL_CAR_STRUCTURE, std::placeholders::_1));
-
-  if (unique_labels) {
-    Point2i zero(0, 0);
-    pts = mean_grouped_by(label_list, pts, zero);
-    Vec3f z(0, 0, 0);
-    xyz_list = mean_grouped_by(label_list, xyz_list, z);
-    depth_list = mean_grouped_by(label_list, depth_list, 0.0f);
-    hm_list = mean_grouped_by(label_list, hm_list, 0.0f);
-  }
 
   if (visualize) {
     Mat star;
@@ -363,13 +339,34 @@ tuple<Points, vector<string>, vector<float>, vector<float>>
     Mat starvisimg;
     starvis.convertTo(starvisimg, CV_8UC1);
     imshow("starvis", starvisimg);
+    imwrite("/tmp/starvis.png", starvisimg);
     waitKey(-1);
   }
 
+
+  vector<SemanticKeypoint> semkp_list;
+  for (auto const& pt: pts) {
+    Point3f xyz_at = xyz.at<Point3f>(pt.y, pt.x);
+    Vec3f xyz_vec{ xyz_at.x, xyz_at.y, xyz_at.z };
+    semkp_list.emplace_back(pt,
+                            xyz_vec,
+                            depth.at<float>(pt.y, pt.x),
+                            hm00.at<float>(pt.y, pt.x),
+                            GLOBAL_CAR_STRUCTURE.find_semantic_part(xyz_vec));
+  }
   auto pts_old_kp = convert_to_precrop(pts, {img.size[1], img.size[0]}, input_res,
                                        /*addnl_scale_factor=*/ADDNL_SCALE_FACTOR);
+  for (size_t i = 0; i < pts_old_kp.size(); i++) {
+    semkp_list[i].pos2d = pts_old_kp[i];
+  }
+  std::ostream_iterator<SemanticKeypoint> out(std::cout, "\n ");
+  std::copy(semkp_list.begin(), semkp_list.end(), out);
+  if (unique_labels) {
+    semkp_list = mean_grouped_by_label(semkp_list);
+  }
+  std::copy(semkp_list.begin(), semkp_list.end(), out);
 
-  return make_tuple(pts_old_kp, label_list, depth_list, hm_list);
+  return semkp_list;
 }
 
 
@@ -403,36 +400,51 @@ vector<Point2i> run_starmap_on_img(const string& starmap_filepath,
 
     auto model = model_load(starmap_filepath, gpu_id);
 
-    Points pts;
-    vector<string> label_list;
-    vector<float> depth_list;
-    vector<float> hm_list;
-    tie(pts, label_list, depth_list, hm_list) =
-      find_semantic_keypoints_prob_depth(model, imgfloat, input_res, visualize);
+    vector<SemanticKeypoint> semkp_list =
+      find_semantic_keypoints_prob_depth(model, imgfloat, input_res, visualize, /*unique_labels=*/true);
 
     if (visualize) {
       auto vis = img;
-      visualize_keypoints(vis, pts, label_list, /*draw_labels=*/true);
+      visualize_keypoints(vis, semkp_list, /*draw_labels=*/true);
       imshow("vis", vis);
+      imwrite("/tmp/vis.png", vis);
       waitKey(-1);
     }
+
+    vector<Point2i> pts;
+    std::transform(semkp_list.begin(), semkp_list.end(),
+                   std::back_inserter(pts),
+                   [](SemanticKeypoint const & semkp) -> Point2i {
+                     return semkp.pos2d;
+                   });
 
     return pts;
 }
 
-void visualize_keypoints(Mat& vis, const Points& pts, const vector<string>& label_list,
+void visualize_keypoints(Mat& vis, const vector<SemanticKeypoint>& semkp_list,
                          bool draw_labels) {
-  for (int i: boost::counting_range<size_t>(0, pts.size())) {
-    auto& pt4 = pts[i];
-    auto& col = GLOBAL_CAR_STRUCTURE.get_label_color(label_list[i]);
+  for (auto const& semkp : semkp_list) {
+    auto& pt4 = semkp.pos2d;
+    auto& col = GLOBAL_CAR_STRUCTURE.get_label_color(semkp.label);
     circle(vis, pt4, 2, Scalar(255, 255, 255), -1);
     circle(vis, pt4, 1, col, -1);
-    if (draw_labels)
-      putText(vis, label_list[i], pt4,
+    if (draw_labels) {
+      putText(vis, semkp.label, pt4,
               cv::FONT_HERSHEY_SIMPLEX,
-              /*fontSize=*/0.30, //std::max(0.4, 0.005 * vis.rows),
+              /*fontSize=*/std::max(0.3, 0.3 * vis.rows / 480),
               /*color=*/Scalar(255, 255, 255), /*lineThickness=*/1);
+    }
   }
+}
+
+std::ostream& operator<< (std::ostream& o, const SemanticKeypoint& semkp) {
+  o << "SemanticKeypoint(" << "pos2d=" << semkp.pos2d << ", "
+    << "xyz=" << semkp.xyz << ","
+    << "depth=" << semkp.depth << ", "
+    << "hm=" << semkp.hm << ", "
+    << "label=" << semkp.label
+    << ")";
+  return o;
 }
 
 }
