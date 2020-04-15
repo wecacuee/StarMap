@@ -1,5 +1,11 @@
-cmake_minimum_required(VERSION 2.8.3)
+cmake_minimum_required(VERSION 3.10.2)
 project(starmap)
+
+# set (CMAKE_CXX_FLAGS_DEBUG
+#   "${CMAKE_CXX_FLAGS_DEBUG} -fno-omit-frame-pointer -fsanitize=address")
+# set (CMAKE_LINKER_FLAGS_DEBUG
+#   "${CMAKE_LINKER_FLAGS_DEBUG} -fno-omit-frame-pointer -fsanitize=address")
+
 
 ## Compile as C++11, supported in ROS Kinetic and newer
 # add_compile_options(-std=c++11)
@@ -8,14 +14,21 @@ project(starmap)
 ## if COMPONENTS list like find_package(catkin REQUIRED COMPONENTS xyz)
 ## is used, also find other catkin packages
 find_package(catkin REQUIRED COMPONENTS
+    cv_bridge
+    image_transport
+    message_filters
+    nodelet
+    pluginlib
     roscpp
     rospy
+    sensor_msgs
+    sort_ros
     std_msgs
-    message_generation
+    starmap_ros_msgs
     )
 
 ## System dependencies are found with CMake's conventions
-find_package(Boost REQUIRED COMPONENTS system program_options)
+find_package(Boost REQUIRED COMPONENTS system program_options filesystem)
 find_package(Torch REQUIRED)
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${TORCH_CXX_FLAGS}")
 find_package(OpenCV 3.4 REQUIRED)
@@ -73,12 +86,6 @@ find_package( gsl-lite 0.36 REQUIRED )
 #   Action2.action
 # )
 
-## Generate added messages and services with any dependencies listed here
-# generate_messages(
-#   DEPENDENCIES
-#   std_msgs  # Or other packages containing msgs
-# )
-
 ################################################
 ## Declare ROS dynamic reconfigure parameters ##
 ################################################
@@ -109,10 +116,22 @@ find_package( gsl-lite 0.36 REQUIRED )
 ## CATKIN_DEPENDS: catkin_packages dependent projects also need
 ## DEPENDS: system dependencies of this project that dependent projects also need
 catkin_package(
-#  INCLUDE_DIRS include
-#  LIBRARIES starmap
-CATKIN_DEPENDS message_runtime
-#  DEPENDS system_lib
+  INCLUDE_DIRS include
+  LIBRARIES starmap
+  CATKIN_DEPENDS message_runtime
+  sensor_msgs
+  image_transport
+  cv_bridge
+  image_transport
+  message_filters
+  message_generation
+  nodelet
+  pluginlib
+  roscpp
+  sensor_msgs
+  sort_ros
+  std_msgs
+  DEPENDS Boost OpenCV EIGEN3
 )
 
 ###########
@@ -130,10 +149,14 @@ set(CMAKE_CXX_STANDARD 11)
 ## Declare a C++ library
 add_library(${PROJECT_NAME}
         src/starmap.cpp
+        src/starmap_nodelet.cpp
 )
+set_target_properties(${PROJECT_NAME} PROPERTIES CXX_STANDARD 11)
 target_link_libraries(${PROJECT_NAME}
-        "${OpenCV_LIBRARIES}"
-        gsl::gsl-lite
+  ${catkin_LIBRARIES}
+  "${OpenCV_LIBRARIES}"
+  gsl::gsl-lite
+  "${TORCH_LIBRARIES}"
 )
 
 ## Add cmake target dependencies of the library
@@ -145,12 +168,17 @@ target_link_libraries(${PROJECT_NAME}
 ## With catkin_make all packages are built within a single CMake context
 ## The recommended prefix ensures that target names across packages don't collide
 add_executable(${PROJECT_NAME}_demo src/starmap_demo.cpp)
+add_executable(${PROJECT_NAME}_node src/starmap_node.cpp)
+target_link_libraries(${PROJECT_NAME}_node
+  ${catkin_LIBRARIES}
+  )
 
 ## Rename C++ executable without prefix
 ## The above recommended prefix causes long target names, the following renames the
 ## target back to the shorter version for ease of user use
 ## e.g. "rosrun someones_pkg node" instead of "rosrun someones_pkg someones_pkg_node"
 set_target_properties(${PROJECT_NAME}_demo PROPERTIES CXX_STANDARD 11)
+set_target_properties(${PROJECT_NAME}_node PROPERTIES CXX_STANDARD 11)
 
 
 ## Add cmake target dependencies of the executable
@@ -165,6 +193,14 @@ target_link_libraries(${PROJECT_NAME}_demo
    "${Boost_LIBRARIES}"
    "${OpenCV_LIBRARIES}"
 )
+
+target_link_libraries(${PROJECT_NAME}_node
+  ${PROJECT_NAME}
+  ${catkin_LIBRARIES}
+  "${TORCH_LIBRARIES}"
+  "${Boost_LIBRARIES}"
+  "${OpenCV_LIBRARIES}"
+  )
 
 
 #############
@@ -207,10 +243,15 @@ install(PROGRAMS
 #############
 
 ## Add gtest based cpp test target and link libraries
-# catkin_add_gtest(${PROJECT_NAME}-test test/test_kp_detector.cpp)
-# if(TARGET ${PROJECT_NAME}-test)
-#   target_link_libraries(${PROJECT_NAME}-test ${PROJECT_NAME})
-# endif()
+catkin_add_gtest(${PROJECT_NAME}-test
+        tests/test_crop.cpp
+        tests/test_hmparse.cpp
+        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+target_link_libraries(${PROJECT_NAME}-test ${PROJECT_NAME}
+  ${catkin_LIBRARIES}
+  "${Boost_LIBRARIES}"
+  "${OpenCV_LIBRARIES}"
+  gtest_main)
 
 ## Add folders to be run by python nosetests
 # catkin_add_nosetests(test)

@@ -32,12 +32,23 @@
   <!-- Dependencies can be catkin packages or system dependencies -->
   <!-- Examples: -->
   <!-- Use depend as a shortcut for packages that are both build and exec dependencies -->
-  <!--   <depend>roscpp</depend> -->
+  <depend>roscpp</depend>
   <!--   Note that this is equivalent to the following: -->
   <!--   <build_depend>roscpp</build_depend> -->
   <!--   <exec_depend>roscpp</exec_depend> -->
   <!-- Use build_depend for packages you need at compile time: -->
-  <build_depend>message_generation</build_depend>
+  <depend>cv_bridge</depend>
+  <depend>darket_ros_msg</depend>
+  <depend>geometry_msgs</depend>
+  <depend>image_transport</depend>
+  <depend>message_filters</depend>
+  <depend>message_generation</depend>
+  <depend>nodelet</depend>
+  <depend>pluginlib</depend>
+  <depend>sensor_msgs</depend>
+  <depend>sort_ros</depend>
+  <depend>std_msgs</depend>
+  <depend>starmap_ros_msgs</depend>
   <!-- Use build_export_depend for packages you need in order to build against this package: -->
   <!--   <build_export_depend>message_generation</build_export_depend> -->
   <!-- Use buildtool_depend for build tool packages: -->
@@ -54,6 +65,6 @@
   <!-- The export tag contains other, unspecified, tags -->
   <export>
     <!-- Other tools can request additional information be placed here -->
-
+    <nodelet plugin="${prefix}/starmap_nodelet.xml" />
   </export>
 </package>

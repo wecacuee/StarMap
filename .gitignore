@@ -108,6 +108,11 @@ ENV/
 
 # mypy
 .mypy_cache/
-
-/src/starmap_model_cpu_no_dropout.onnx
+*.bak
+nohup.out
+build
+data/Pascal3D
+.dir-locals.el
+.gdb_history
 CMakeLists.txt.user
+

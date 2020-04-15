@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="utf-8"?>
+<launch>
+  <arg name="rqt_view_sort_ros" default="true" />
+  <arg name="rqt_view_starmap" default="false" />
+  <arg name="bagfile_basename" default="$(find starmap)/data/arl/arl_husky_overpasscity_onecar_b1" />
+  <arg name="bagfile" default="$(arg bagfile_basename).bag" />
+  <arg name="outdata_dir" default="$(arg bagfile_basename)/" />
+  <arg name="record_rosbag" default="true" />
+  <arg name="starmap_debug" default="false" />
+  <node pkg="rosbag" type="play" name="rosbag"
+        required="true"
+        args="--clock $(arg bagfile)" />
+  <include file="$(find darknet_ros)/launch/darknet_ros.launch" >
+    <arg name="image" value="/husky/camera/image_raw" />
+    <arg name="bounding_boxes" value="/darknet_ros/bounding_boxes" />
+  </include>
+  <node pkg="nodelet" type="nodelet" name="orcvio_nodelet_manager"  args="manager" output="screen"/>
+  <node pkg="nodelet" type="nodelet" name="sort_ros"
+        args="load sort_ros/SortRos orcvio_nodelet_manager" >
+    <param name="image_topic" value="/husky/camera/image_raw"/>
+    <param name="bbox_topic" value="/darknet_ros/bounding_boxes" />
+    <param name="tracked_bbox_topic" value="tracked_bounding_boxes" />
+  </node>
+  <node pkg="nodelet" type="nodelet" name="starmap"
+        args="load starmap/Starmap orcvio_nodelet_manager"
+        output="screen"
+        unless="$(arg starmap_debug)"
+        >
+    <param name="image_topic" value="/husky/camera/image_raw" />
+    <param name="bbox_topic" value="/sort_ros/tracked_bounding_boxes" />
+    <param name="keypoint_topic" value="/starmap/keypoints" />
+    <param name="starmap_model_path" value="$(find starmap)/models/model_cpu-jit.pth" />
+    <param name="gpu_id" value="0" type="int" />
+  </node>
+  <include file="$(find starmap)/launch/starmap.launch" if="$(arg starmap_debug)" />
+  <node pkg="rqt_image_view" type="rqt_image_view" name="rqt_image_view_det"
+        args=" /sort_ros/detection_image"
+        if="$(arg rqt_view_sort_ros)"/>
+  <node pkg="rqt_image_view" type="rqt_image_view" name="rqt_image_view_vis"
+        args=" /starmap/visualization"
+        if="$(arg rqt_view_starmap)" /> 
+  <node pkg="image_view" type="extract_images" name="extract_images_sort_ros"
+        unless="$(arg rqt_view_sort_ros)">
+    <remap from="image" to="/sort_ros/detection_image" />
+    <param name="filename_format" value="$(arg outdata_dir)/extract_images_sort_ros_%04d.jpg" />
+    <param name="sec_per_frame" value="0.1"  />
+  </node>
+  <node pkg="image_view" type="extract_images" name="extract_images_starmap"
+        unless="$(arg rqt_view_starmap)" >
+    <remap from="image" to="/starmap/visualization" />
+    <param name="filename_format" value="$(arg outdata_dir)/extract_images_starmap_%04d.jpg" />
+    <param name="sec_per_frame" value="0.1"  />
+  </node>
+  <node if="$(arg record_rosbag)" pkg="rosbag" type="record" name="bag_record"
+    args=" -O $(arg outdata_dir)/with_keypoints.bag
+              /husky/camera/image_raw
+              /husky/imu
+              /husky/camera/detection
+              /husky/semantic_camera/image_raw
+              /unity_ros/husky/TrueState/odom
+              /darknet_ros/bounding_boxes
+              /sort_ros/tracked_bounding_boxes
+              /sort_ros/detection_image
+              /starmap/keypoints
+              /starmap/visualization/compressed
+              " />
+</launch>

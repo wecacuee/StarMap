@@ -1,6 +1,9 @@
+from builtins import range
 from .layers.Residual import Residual
 import torch.nn as nn
 import math
+
+from starmap import ref
 
 class Hourglass(nn.Module):
   def __init__(self, n, nModules, nFeats):
@@ -30,8 +33,9 @@ class Hourglass(nn.Module):
     self.low1_ = nn.ModuleList(_low1_)
     self.low3_ = nn.ModuleList(_low3_)
     
-    self.up2 = nn.Upsample(scale_factor = 2)
-    
+    #self.up2 = nn.Upsample(scale_factor = 2)
+    self.up2 = nn.UpsamplingNearest2d(scale_factor = 2)
+
   def forward(self, x):
     up1 = x
     for j in range(self.nModules):
@@ -56,7 +60,7 @@ class Hourglass(nn.Module):
     return up1 + up2
 
 class HourglassNet(nn.Module):
-  def __init__(self, nStack, nModules, nFeats, numOutput):
+  def __init__(self, nStack, nModules, nFeats, numOutput = ref.nJoints):
     super(HourglassNet, self).__init__()
     self.nStack = nStack
     self.nModules = nModules
@@ -114,5 +118,5 @@ class HourglassNet(nn.Module):
         tmpOut_ = self.tmpOut_[i](tmpOut)
         x = x + ll_ + tmpOut_
     
-    return tuple(out)
+    return out
 
