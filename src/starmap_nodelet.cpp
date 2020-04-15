@@ -129,7 +129,10 @@ namespace starmap
       // starmap::visualize_keypoints(bboxroi, pts, label_list, /*draw_labels=*/false);
 
     }
-    starmap::visualize_keypoints(image, all_points, all_label_list, /*draw_labels=*/false);
+    auto private_nh = getPrivateNodeHandle();
+    bool draw_labels;
+    private_nh.param("draw_labels", draw_labels, true);
+    starmap::visualize_keypoints(image, all_points, all_label_list, /*draw_labels=*/draw_labels);
   }
 
 

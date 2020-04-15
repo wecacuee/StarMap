@@ -284,27 +284,29 @@ tuple<Mat, Mat, Mat>
   return make_tuple(cvout.clone(), xyz.clone(), depth.clone());
 }
 
-template<typename T, typename T2>
-vector<T>
-mean_grouped_by(vector<T2> const& key_vect, vector<T> const& value_vec,
-                T const& zero)
+template<typename K, typename V>
+vector<V>
+mean_grouped_by(vector<K> const& key_vect, vector<V> const& value_vec,
+                V const& zero)
 {
-  size_t idx;
-  unordered_map<T2, vector<size_t>> label2idx;
-  for (auto const& label : key_vect) {
+  unordered_map<K, vector<V>> label2idx;
+  for (size_t idx = 0; idx < key_vect.size(); idx ++) {
+    K const& label = key_vect[idx];
+    V const& val = value_vec[idx];
     if (label2idx.count(label)) {
-      label2idx.at(label).push_back(++idx);
+      label2idx.at(label).push_back(val);
     } else {
-      vector<size_t> indices({idx});
-      label2idx[label] = indices;
+      vector<V> values({val});
+      label2idx[label] = values;
     }
   }
-  vector<T> value_uniq;
 
+  vector<V> value_uniq;
   for (auto const& keyval: label2idx) {
-    T value_mean = std::accumulate(value_vec.begin(), value_vec.end(), zero);
-    if (keyval.second.size()) {
-      float ksize = keyval.second.size();
+    vector<V> values = keyval.second;
+    V value_mean = std::accumulate(values.begin(), values.end(), zero);
+    float ksize = values.size();
+    if (ksize) {
       value_uniq.emplace_back(value_mean / ksize);
     }
   }
@@ -345,11 +347,11 @@ tuple<Points, vector<string>, vector<float>, vector<float>>
 
   if (unique_labels) {
     Point2i zero(0, 0);
-    Points pts_uniq = mean_grouped_by(label_list, pts, zero);
+    pts = mean_grouped_by(label_list, pts, zero);
     Vec3f z(0, 0, 0);
-    vector<Vec3f> xyz_uniq = mean_grouped_by(label_list, xyz_list, z);
-    vector<float> depth_uniq = mean_grouped_by(label_list, depth_list, 0.0f);
-    vector<float> hm_uniq = mean_grouped_by(label_list, hm_list, 0.0f);
+    xyz_list = mean_grouped_by(label_list, xyz_list, z);
+    depth_list = mean_grouped_by(label_list, depth_list, 0.0f);
+    hm_list = mean_grouped_by(label_list, hm_list, 0.0f);
   }
 
   if (visualize) {
@@ -410,7 +412,7 @@ vector<Point2i> run_starmap_on_img(const string& starmap_filepath,
 
     if (visualize) {
       auto vis = img;
-      visualize_keypoints(vis, pts, label_list);
+      visualize_keypoints(vis, pts, label_list, /*draw_labels=*/true);
       imshow("vis", vis);
       waitKey(-1);
     }
@@ -428,8 +430,8 @@ void visualize_keypoints(Mat& vis, const Points& pts, const vector<string>& labe
     if (draw_labels)
       putText(vis, label_list[i], pt4,
               cv::FONT_HERSHEY_SIMPLEX,
-              /*fontSize=*/std::max(0.4, 0.01 * vis.rows),
-              /*color=*/col, /*lineThickness=*/1);
+              /*fontSize=*/0.30, //std::max(0.4, 0.005 * vis.rows),
+              /*color=*/Scalar(255, 255, 255), /*lineThickness=*/1);
   }
 }
 
