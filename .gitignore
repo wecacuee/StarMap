@@ -115,4 +115,5 @@ data/Pascal3D
 .dir-locals.el
 .gdb_history
 CMakeLists.txt.user
+data/arl
 
