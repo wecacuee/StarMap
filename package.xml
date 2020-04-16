@@ -38,7 +38,7 @@
   <!--   <exec_depend>roscpp</exec_depend> -->
   <!-- Use build_depend for packages you need at compile time: -->
   <depend>cv_bridge</depend>
-  <depend>darket_ros_msg</depend>
+  <depend>darket_ros_msgs</depend>
   <depend>geometry_msgs</depend>
   <depend>image_transport</depend>
   <depend>message_filters</depend>
