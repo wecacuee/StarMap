@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <launch>
   <arg name="rqt_view_sort_ros" default="true" />
-  <arg name="rqt_view_starmap" default="true" />
+  <arg name="rqt_view_starmap" default="false" />
   <arg name="bagfile_basename" default="$(find starmap)/data/arl/arl_husky_overpasscity_onecar_a1" />
   <arg name="bagfile" default="$(arg bagfile_basename).bag" />
   <arg name="outdata_dir" default="$(arg bagfile_basename)/" />
