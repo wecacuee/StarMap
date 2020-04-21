@@ -425,15 +425,15 @@ void visualize_keypoints(Mat& vis, const vector<SemanticKeypoint>& semkp_list,
     auto& pt4 = semkp.pos2d;
     auto col = GLOBAL_CAR_STRUCTURE.get_label_color(semkp.label);
     if (draw_labels) {
-        circle(vis, pt4, 4, Scalar(255, 255, 255), -1);
-        circle(vis, pt4, 3, col, -1);
+        circle(vis, pt4, 3, Scalar(255, 255, 255), -1);
+        circle(vis, pt4, 2, col, -1);
         putText(vis, semkp.label, pt4,
                 cv::FONT_HERSHEY_SIMPLEX,
                 /*fontSize=*/std::max(0.3, 0.3 * vis.rows / 480),
                 /*color=*/Scalar(255, 255, 255), /*lineThickness=*/1);
     } else {
-        circle(vis, pt4, 4, Scalar(255, 255, 255), -1);
-        circle(vis, pt4, 3, col, -1);
+        circle(vis, pt4, 3, Scalar(255, 255, 255), -1);
+        circle(vis, pt4, 2, col, -1);
     }
   }
 }
