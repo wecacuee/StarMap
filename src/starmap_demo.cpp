@@ -19,9 +19,9 @@ tuple<bool, bpo::variables_map> parse_commandline(const int argc, char** const a
     bpo::options_description desc("Demonstrate running starmap");
     desc.add_options()
             ("help", "produce help message")
-            ("loadModel", bpo::value<string>()->required(),
+            ("loadModel", bpo::value<string>()->default_value("models/model_cpu-jit.pth"),
              "Path to the pre-trained model file")
-            ("demo", bpo::value<string>()->required(),
+            ("demo", bpo::value<string>()->default_value("tests/data/car-big.jpg"),
              "Path to an image file to test upon ")
             ("input_res", bpo::value<int>()->default_value(256),
              "The resolution of image that network accepts")
