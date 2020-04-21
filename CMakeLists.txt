@@ -22,7 +22,6 @@ find_package(Torch REQUIRED)
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${TORCH_CXX_FLAGS}")
 find_package(OpenCV 3.4 REQUIRED)
 find_package(Eigen3 REQUIRED)
-find_package( gsl-lite 0.36 REQUIRED )
 
 
 
@@ -36,7 +35,6 @@ cs_add_library(${PROJECT_NAME}
 set_target_properties(${PROJECT_NAME} PROPERTIES CXX_STANDARD 11)
 target_link_libraries(${PROJECT_NAME}
   "${OpenCV_LIBRARIES}"
-  gsl::gsl-lite
   "${TORCH_LIBRARIES}"
 )
 

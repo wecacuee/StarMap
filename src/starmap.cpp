@@ -1,3 +1,4 @@
+#include <initializer_list>
 #include <type_traits> // enable_if
 #include <tuple> // tuple, tie
 #include <cmath> // floor
@@ -9,8 +10,15 @@
 #include "starmap/starmap.h" // starmap
 #include "opencv2/opencv.hpp" // cv::*
 #include "opencv2/core/mat.hpp"
-#include "gsl/gsl-lite.hpp" // gsl::*
 #include "torch/script.h"
+
+void gsl_Ensures(bool condition) {
+  assert(condition);
+}
+
+void gsl_Expects(bool condition) {
+  assert(condition);
+}
 
 
 using std::vector;
@@ -44,22 +52,30 @@ using cv::cvtColor;
 using cv::COLOR_GRAY2BGR;
 using boost::format;
 
+template<typename _Tp, int m, int n>
+Matx<_Tp, m, n> from_initializer_list(std::initializer_list<_Tp> list) {
+  assert(list.size() == m*n);
+  std::vector<_Tp> values(list);
+  Matx<_Tp, m, n> mat(values.data());
+  return mat;
+}
+
 namespace starmap {
 
 CarStructure::CarStructure() :
-    canonical_points_{
-                      -0.09472257, -0.07266671,  0.10419698,
-                      0.09396329, -0.07186594,  0.10468729,
-                      0.100639  , 0.26993483, 0.11144333,
-                      -0.100402 ,  0.2699945,  0.111474 ,
-                      -0.12014713, -0.40062513, -0.02047777,
-                      0.1201513 , -0.4005558 , -0.02116918,
-                      0.12190333, 0.40059162, 0.02385612,
-                      -0.12194733,  0.40059462,  0.02387712,
-                      -0.16116614, -0.2717491 , -0.07981283,
-                      -0.16382502,  0.25057048, -0.07948726,
-                      0.1615844 , -0.27168764, -0.07989835,
-                      0.16347528,  0.2507412 , -0.07981754 },
+    canonical_points_ ( from_initializer_list<float, 12, 3>({
+                                                           -0.09472257, -0.07266671,  0.10419698,
+                                                           0.09396329, -0.07186594,  0.10468729,
+                                                           0.100639  , 0.26993483, 0.11144333,
+                                                           -0.100402 ,  0.2699945,  0.111474 ,
+                                                           -0.12014713, -0.40062513, -0.02047777,
+                                                           0.1201513 , -0.4005558 , -0.02116918,
+                                                           0.12190333, 0.40059162, 0.02385612,
+                                                           -0.12194733,  0.40059462,  0.02387712,
+                                                           -0.16116614, -0.2717491 , -0.07981283,
+                                                           -0.16382502,  0.25057048, -0.07948726,
+                                                           0.1615844 , -0.27168764, -0.07989835,
+                                                           0.16347528,  0.2507412 , -0.07981754 })),
     labels_{
             "upper_left_windshield",
             "upper_right_windshield",
@@ -73,18 +89,18 @@ CarStructure::CarStructure() :
             "left_back_wheel",
             "right_front_wheel",
             "right_back_wheel"},
-    colors_{0, 0, 0,
-            0, 0, 128,
-            0, 0, 255,
-            0, 128, 0,
-            0, 128, 128,
-            0, 128, 255,
-            0, 255, 0,
-            0, 255, 128,
-            0, 255, 255,
-            255, 0, 0,
-            255, 0, 128,
-            255, 0, 255}
+    colors_ ( from_initializer_list<uint8_t, 12, 3>({ 0, 0, 0,
+                                                    0, 0, 128,
+                                                    0, 0, 255,
+                                                    0, 128, 0,
+                                                    0, 128, 128,
+                                                    0, 128, 255,
+                                                    0, 255, 0,
+                                                    0, 255, 128,
+                                                    0, 255, 255,
+                                                    255, 0, 0,
+                                                    255, 0, 128,
+                                                    255, 0, 255 }))
   {
   }
 
