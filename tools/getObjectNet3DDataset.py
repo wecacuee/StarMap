@@ -2,6 +2,9 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
+from builtins import chr
+from builtins import zip
+from builtins import range
 import _init_paths
 
 import os
@@ -33,7 +36,7 @@ tags_viewpoint = ['azimuth_coarse', 'elevation_coarse', 'azimuth', 'elevation', 
 
 classNames = [v for v in sorted(ref.ObjectNet3DPointInfo)]
 
-print classNames
+print(classNames)
 
 val_classes = []
 for i, cls in enumerate(classNames):
@@ -67,7 +70,7 @@ for cls in classNames:
     models = h5py.File(model_path, 'r')[cls]
     matFormat = False
     numH5 += 1
-  print cls, cls in val_classes
+  print(cls, cls in val_classes)
   if matFormat:
     model_pts[cls] = np.zeros((len(models), maxNKeypoints, 3))
     valid[cls] = np.zeros((len(models), maxNKeypoints))
@@ -201,7 +204,7 @@ for split in ['train', 'val']:
                 if a == 0 and e == 0 and theta == 0:
                   continue
               except:
-                print 'NO ANNOTATION'
+                print('NO ANNOTATION')
                 continue
               C = np.array([d * np.cos(e) * np.sin(a), -d * np.cos(e) * np.cos(a), d * np.sin(e)]).reshape(3, 1)
               
@@ -279,7 +282,7 @@ for split in ['train', 'val']:
                   ax.plot([xb], [yb], [zb], 'w')
                 
                 img_path = '{}/{}.JPEG'.format(IMAGE_PATH, im_name)
-                print img_path
+                print(img_path)
                 img = cv2.imread(img_path)
                 bb = data['bbox'][i][0]
                 
@@ -297,10 +300,10 @@ for split in ['train', 'val']:
                 cv2.imshow('img', img)
                 cv2.waitKey()
             else:
-              print 'PROJECTION ERROR'
+              print('PROJECTION ERROR')
               pass
           else:
-            print 'MISS CAD'
+            print('MISS CAD')
             continue
           
           if ProjectPoint:
@@ -311,7 +314,7 @@ for split in ['train', 'val']:
              projected_anchor[j] = x[j].copy()
              anchors_3d[j] = p3d[j].copy()
           else:
-            print 'PROJECTION ERROR'
+            print('PROJECTION ERROR')
             continue
             
           cnt += 1
@@ -357,7 +360,7 @@ for split in ['train', 'val']:
                   annot['viewpoint_' + tag_viewpoint] += [data['viewpoint'][i][0][tag_viewpoint + '_coarse'][0][0][0]]
                 else:
                   annot['viewpoint_' + tag_viewpoint] += [0]
-    print 'cnt =', cnt, ',numNoParts =', numNoParts, ',numNoAnchors =', numNoAnchors, ', numLeave', numLeave, ',total =', total
+    print('cnt =', cnt, ',numNoParts =', numNoParts, ',numNoAnchors =', numNoAnchors, ', numLeave', numLeave, ',total =', total)
     
   with h5py.File('{}/ObjectNet3D-{}.h5'.format(SAVE_PATH, split),'w') as f:
     f.attrs['name'] = 'ObjectNet3D-{}'.format(split)

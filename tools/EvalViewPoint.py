@@ -118,7 +118,7 @@ for idx in range(n):
   Acc30 += 1 if err_ <= 30. else 0
   Acc10 += 1 if err_ <= 10. else 0
   bar.suffix = '[{0}/{1}]|Total: {total:} | ETA: {eta:} | Acc_10: {Acc10:.6f} | Acc_30: {Acc30:.6f}'.format(idx, n, total = bar.elapsed_td, eta = bar.eta_td, Acc10 = Acc10 / (idx + 1.), Acc30 = Acc30 / (idx + 1.)) 
-  bar.next()
+  next(bar)
   if DEBUG:
     debugger = Debugger()
     input, target, mask = dataset[index]
