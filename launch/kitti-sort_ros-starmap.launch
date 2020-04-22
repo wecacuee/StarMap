@@ -8,11 +8,13 @@
   <arg name="record_rosbag" default="true" />
   <arg name="starmap_debug" default="false" />
   <node pkg="rosbag" type="play" name="rosbag"
+        args="--clock $(arg bagfile)"
         required="true"
-        args="--clock $(arg bagfile)" />
+        />
   <include file="$(find darknet_ros)/launch/darknet_ros.launch" >
     <arg name="image" value="/husky/camera/image_raw" />
     <arg name="bounding_boxes" value="/darknet_ros/bounding_boxes" />
+    <arg name="launch_prefix" value=""/>
   </include>
   <node pkg="nodelet" type="nodelet" name="orcvio_nodelet_manager"  args="manager" output="screen"/>
   <node pkg="nodelet" type="nodelet" name="sort_ros"
@@ -31,12 +33,13 @@
     <param name="keypoint_topic" value="/starmap/keypoints" />
     <param name="starmap_model_path" value="$(find starmap)/models/model_cpu-jit.pth" />
     <param name="gpu_id" value="0" type="int" />
+    <param name="draw_labels" value="false" type="bool" />
   </node>
   <include file="$(find starmap)/launch/starmap.launch" if="$(arg starmap_debug)" />
-  <node pkg="rqt_image_view" type="rqt_image_view" name="rqt_image_view_det"
+  <node pkg="image_view" type="image_view" name="image_view_det"
         args=" /sort_ros/detection_image"
         if="$(arg rqt_view_sort_ros)"/>
-  <node pkg="rqt_image_view" type="rqt_image_view" name="rqt_image_view_vis"
+  <node pkg="image_view" type="image_view" name="image_view_vis"
         args=" /starmap/visualization"
         if="$(arg rqt_view_starmap)" /> 
   <node pkg="image_view" type="extract_images" name="extract_images_sort_ros"
