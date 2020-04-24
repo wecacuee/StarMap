@@ -441,7 +441,7 @@ void visualize_keypoints(Mat& vis, const vector<SemanticKeypoint>& semkp_list,
   for (auto const& semkp : semkp_list) {
     auto& pt4 = semkp.pos2d;
     auto col = GLOBAL_CAR_STRUCTURE.get_label_color(semkp.label);
-    int radius = std::max(2, 2 * vis.rows / 80);
+    int radius = std::max(2, 2 * vis.rows / 40);
     circle(vis, pt4, radius + 1, Scalar(255, 255, 255), -1);
     circle(vis, pt4, radius, col, -1);
     if (draw_labels) {
