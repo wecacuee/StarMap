@@ -69,6 +69,7 @@ namespace starmap
     private_nh.param<std::string>("keypoint_topic", keypoint_topic, "keypoints");
     private_nh.param<std::string>("visualization_topic", visualization_topic, "visualization");
     private_nh.param<int>("gpu_id", gpu_id, -1);
+    private_nh.param("draw_labels", draw_labels_, true);
     timer_ = nh.createTimer(ros::Duration(0.05),
                             std::bind(& Starmap::timerCb, this, sph::_1));
 
@@ -99,7 +100,7 @@ namespace starmap
   void  visualize_all_bbox(cv::Mat& image,
                            const starmap_ros_msgs::TrackedBBoxListWithKeypointsConstPtr& bbox_with_kp_list)
   {
-    std::vector<SemanticKeypoint> all_semkp_list;
+    // std::vector<SemanticKeypoint> all_semkp_list;
     for (auto& bbox_with_kp : bbox_with_kp_list->bounding_boxes) {
       auto& bbox = bbox_with_kp.bbox;
       auto bbox_rect = safe_rect_bbox(bbox_with_kp.bbox, image);
@@ -116,24 +117,27 @@ namespace starmap
       auto bboxroi = image(bbox_rect);
       Points pts;
       std::vector<string> label_list;
+      std::vector<SemanticKeypoint> bbox_semkp_list;
       for (auto& semkp: bbox_with_kp.keypoints) {
         cv::Point2i pti(semkp.x, semkp.y);
         pts.emplace_back(pti);
         label_list.emplace_back(semkp.semantic_part_label_name);
 
-        cv::Point2i gkp = pti + cv::Point2i(bbox_rect.x, bbox_rect.y);
+        cv::Point2i gkp = pti; // + 
         SemanticKeypoint skp;
         skp.pos2d = gkp;
         skp.label = semkp.semantic_part_label_name;
-        all_semkp_list.push_back(skp);
+        bbox_semkp_list.push_back(skp);
       }
-      // starmap::visualize_keypoints(bboxroi, pts, label_list, /*draw_labels=*/false);
-
+      starmap::visualize_keypoints(bboxroi, bbox_semkp_list,
+                                   /*draw_labels=*/draw_labels_);
+      // for (auto const & skp : bbox_semkp_list) {
+      //   SemanticKeypoint skp2( skp );
+      //   skp2.pos2d = skp.pos2d + cv::Point2i(bbox_rect.x, bbox_rect.y);
+      //   all_semkp_list.push_back(skp2);
+      // }
     }
-    auto private_nh = getPrivateNodeHandle();
-    bool draw_labels;
-    private_nh.param("draw_labels", draw_labels, true);
-    starmap::visualize_keypoints(image, all_semkp_list, /*draw_labels=*/draw_labels);
+    // starmap::visualize_keypoints(image, all_semkp_list, /*draw_labels=*/draw_labels_);
   }
 
 
@@ -227,6 +231,7 @@ namespace starmap
              > input_img_bbox_queue_;
   std::mutex image_to_publish_mutex_;
   int max_queue_size_ = 10;
+  bool draw_labels_;
 };
 
 } // namespace Starmap
