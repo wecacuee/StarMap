@@ -52,14 +52,6 @@ using cv::cvtColor;
 using cv::COLOR_GRAY2BGR;
 using boost::format;
 
-template<typename _Tp, int m, int n>
-Matx<_Tp, m, n> to_cvmatx(std::initializer_list<_Tp> list) {
-  assert(list.size() == m*n);
-  std::vector<_Tp> values(list);
-  Matx<_Tp, m, n> mat(values.data());
-  return mat;
-}
-
 namespace starmap {
 
 CarStructure::CarStructure() :
@@ -239,7 +231,8 @@ Mat nms(const Mat& det, const int size) {
  * @return        Vector of points above threshold
  */
 vector<Point2i>
-    parse_heatmap(Mat & det, const float thresh) {
+parse_keypoints_from_heatmap(Mat & det, const float thresh, const int border_threshold)
+{
   gsl_Expects(det.dims == 2);
   gsl_Expects(det.data != nullptr);
   Mat mask = det < thresh;
@@ -247,7 +240,17 @@ vector<Point2i>
   Mat pooled = nms(det);
   vector<Point2i> pts;
   findNonZero(pooled > thresh, pts);
-  return pts;
+
+  vector<Point2i> non_border_pts;
+  std::copy_if(pts.begin(), pts.end(),
+               std::back_inserter(non_border_pts),
+               [&det, &border_threshold](Point2i const & pt) {
+                 return (pt.x >= border_threshold) &&
+                   (pt.y >= border_threshold) &&
+                   (pt.y < det.rows - border_threshold) &&
+                   (pt.x < det.cols - border_threshold);
+               });
+  return non_border_pts;
 }
 
 // Convert a char/float mat to torch Tensor
@@ -330,6 +333,72 @@ mean_grouped_by_label(vector<SemanticKeypoint> const& semkp_list)
 }
 
 
+cv::Mat extract_patch(const cv::Mat& hm, const cv::Point2i& pt,
+                      const int rx = 1,
+                      const int ry = 1)
+{
+  assert(pt.x - rx >= 0);
+  assert(pt.y - ry >= 0);
+  assert(pt.y + ry < hm.rows);
+  assert(pt.x + rx < hm.cols);
+  assert(hm.type() == CV_32FC1);
+  cv::Rect patchrect(pt.x - rx,
+                     pt.y - ry,
+                     2 * ry + 1,
+                     2 * rx + 1);
+  cv::Mat patch = hm(patchrect);
+  return patch;
+}
+
+
+cv::Matx22f hessian(const cv::Mat& patch)
+{
+  assert(patch.cols == 3);
+  assert(patch.rows == 3);
+  int rx = patch.cols / 2;
+  int ry = patch.rows / 2;
+  // Start, middle and end of patch in x and y directions
+  int sx = 0, mx = rx, ex = patch.cols - 1;
+  int sy = 0, my = ry, ey = patch.rows - 1;
+  float h11 = patch.at<float>(my, ex) - 2 * patch.at<float>(my,mx)
+    + patch.at<float>(my, sx);
+  float h12 = 0.5f * (patch.at<float>(ey, ex) - patch.at<float>(ey,sx)
+                      - (patch.at<float>(sy, ex) - patch.at<float>(sy, sx)));
+  float h21 = 0.5f * (patch.at<float>(ey, ex) - patch.at<float>(sy, ex)
+                      - (patch.at<float>(ey, sx) - patch.at<float>(sy, sx)));
+  float h22 = patch.at<float>(ey, mx) - 2 * patch.at<float>(my,mx)
+    + patch.at<float>(sy, mx);
+  cv::Matx22f H;
+  H << h11, h12, h21, h22;
+  return H;
+}
+
+bool is_positive_definite(const cv::Matx22f& M)
+{
+  cv::Matx22f M_T = M.t();
+  cv::Matx22f diff;
+  cv::absdiff(M_T, M, diff);
+  double diffval = cv::sum(diff)[0] / 4.0;
+  assert(diffval < 1e-4); // M must be symmetric;
+  // Its leading principal minors are all positive
+  // https://en.wikipedia.org/wiki/Sylvester%27s_criterion
+  return (M(0,0) > 0) && (cv::determinant(M) > 0);
+}
+
+
+cv::Matx22f SemanticKeypoint::cov_from_heatmap(cv::Mat const & hm_patch)
+{
+  // Assuming heatmap to the log likelihood, we take the
+  // the inverse of fischer information matrix to be the covariance matrix
+  cv::Matx22f cov = cv::Matx22f::eye();
+  cv::Matx22f negH = -1 * hessian(hm_patch);
+  if (is_positive_definite(negH)) {
+    cov = negH.inv();
+  }
+  return cov;
+}
+
+
 //tuple<Points, vector<string>, vector<float>, vector<float>>
 vector<SemanticKeypoint>
    find_semantic_keypoints_prob_depth(torch::jit::script::Module model,
@@ -345,7 +414,7 @@ vector<SemanticKeypoint>
 
   Mat hm00, xyz, depth;
   tie(hm00, xyz, depth)  = model_forward(model, img_cropped);
-  auto pts = parse_heatmap(hm00, 0.1);
+  auto pts = parse_keypoints_from_heatmap(hm00, 0.1);
 
   if (visualize) {
     Mat star;
@@ -368,7 +437,7 @@ vector<SemanticKeypoint>
     semkp_list.emplace_back(pt,
                             xyz_vec,
                             depth.at<float>(pt.y, pt.x),
-                            hm00.at<float>(pt.y, pt.x),
+                            extract_patch(hm00, pt),
                             GLOBAL_CAR_STRUCTURE.find_semantic_part(xyz_vec));
   }
   auto pts_old_kp = convert_to_precrop(pts, {img.size[1], img.size[0]}, input_res,
@@ -416,7 +485,8 @@ vector<Point2i> run_starmap_on_img(const string& starmap_filepath,
     auto model = model_load(starmap_filepath, gpu_id);
 
     vector<SemanticKeypoint> semkp_list =
-      find_semantic_keypoints_prob_depth(model, imgfloat, input_res, visualize, /*unique_labels=*/true);
+      find_semantic_keypoints_prob_depth(model, imgfloat, input_res, visualize,
+                                         /*unique_labels=*/true);
 
     if (visualize) {
       auto vis = img;
@@ -457,7 +527,7 @@ std::ostream& operator<< (std::ostream& o, const SemanticKeypoint& semkp) {
   o << "SemanticKeypoint(" << "pos2d=" << semkp.pos2d << ", "
     << "xyz=" << semkp.xyz << ","
     << "depth=" << semkp.depth << ", "
-    << "hm=" << semkp.hm << ", "
+    << "hm_patch=" << semkp.hm_patch << ", "
     << "label=" << semkp.label
     << ")";
   return o;

@@ -42,7 +42,7 @@ TEST(HmParser, Nms) {
 TEST(HmParser, parseHeatmap) {
     cv::Mat hm;
     safe_cv2_imread().convertTo(hm, CV_32F, 1/ 255.);
-    auto pts = starmap::parse_heatmap(hm);
+    auto pts = starmap::parse_keypoints_from_heatmap(hm);
 
     // Serialize using opencv
     cv::FileStorage fs("tests/data/test-lenna-parseHeatmap-out.cv2.yaml",
@@ -88,7 +88,7 @@ TEST(HmParser, parseHeatmap_car) {
                       cv::FileStorage::READ);
   auto hm0 = fs["hm00"].mat();
   // std::cerr << cv::format(hm0, cv::Formatter::FMT_PYTHON) << "\n";
-  auto pts = starmap::parse_heatmap(hm0);
+  auto pts = starmap::parse_keypoints_from_heatmap(hm0);
 
   // Serialize using opencv
   auto expected_pts = fs2["pts"].mat();

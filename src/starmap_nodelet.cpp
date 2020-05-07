@@ -174,7 +174,7 @@ namespace starmap
           starmap_ros_msgs::SemanticKeypointWithCovariance kpt;
           kpt.x = pt.x;
           kpt.y = pt.y;
-          kpt.cov.insert(kpt.cov.end(), {semkp.hm, 0, 0, semkp.hm});
+          kpt.cov.insert(kpt.cov.end(), semkp.cov.val,  semkp.cov.val + semkp.cov.rows * semkp.cov.cols);
           kpt.semantic_part_label_name = semkp.label;
           kpt.semantic_part_label =
             starmap::GLOBAL_CAR_STRUCTURE.get_label_index(semkp.label);

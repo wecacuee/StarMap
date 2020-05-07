@@ -9,6 +9,14 @@
 
 namespace starmap {
 
+template<typename _Tp, int m, int n>
+  cv::Matx<_Tp, m, n> to_cvmatx(std::initializer_list<_Tp> list) {
+   assert(list.size() == m*n);
+   std::vector<_Tp> values(list);
+   cv::Matx<_Tp, m, n> mat(values.data());
+   return mat;
+}
+
 cv::Mat crop(const cv::Mat& img,
             const int desired_side);
 
@@ -21,23 +29,40 @@ Points run_starmap_on_img(const std::string& starmap_filepath,
 
 
 struct SemanticKeypoint {
-  SemanticKeypoint(cv::Point2i p,
-                   cv::Vec3f x,
-                  float d,
-                  float h,
-                  std::string l)
+  cv::Matx22f cov_from_heatmap(cv::Mat const & hm_patch);
+  SemanticKeypoint(cv::Point2i const & p,
+                   cv::Vec3f const & x,
+                  const float d,
+                   cv::Mat const &  h,
+                  std::string const& l)
     : pos2d(p),
     xyz(x),
     depth(d),
-    hm(h),
+    hm_patch(h),
+    cov(cov_from_heatmap(h)),
     label(l)
   {}
+
+  SemanticKeypoint(cv::Point2i const & p,
+                  cv::Vec3f const & x,
+                  const float d,
+                  const cv::Mat& h,
+                  cv::Matx22f const & cov,
+                  std::string const & l)
+    : pos2d(p),
+      xyz(x),
+      depth(d),
+      hm_patch(h),
+      cov(cov),
+      label(l)
+    {}
 
   SemanticKeypoint()
     : pos2d{0, 0},
     xyz{0, 0, 0},
     depth(0),
-    hm(0),
+    hm_patch(to_cvmatx<float, 3, 3>({0, 0, 0, 0, 1, 0, 0, 0, 0})),
+    cov(cv::Matx22f::eye()),
     label("")
   {}
 
@@ -51,10 +76,18 @@ struct SemanticKeypoint {
     if ( (other.label != "") && (label != "") && label != other.label ) {
       throw std::runtime_error("label must be the same got: " + label + " other: " + other.label);
     }
+
+    cv::Matx22f sumcov{1, 0, 0, 1};
+    cv::Matx21f myeigvals, other_eigvals;
+    cv::eigen(cov, myeigvals);
+    cv::eigen(other.cov, other_eigvals);
+    sumcov(0, 0) = std::max(myeigvals(0, 0), other_eigvals(0, 0));
+    sumcov(1, 1) = std::max(myeigvals(1, 0), other_eigvals(1, 0));
     SemanticKeypoint sum(pos2d + other.pos2d,
                          xyz + other.xyz,
                          depth + other.depth,
-                         (hm + other.hm) / 2.0,
+                         (hm_patch + other.hm_patch) / 2.0,
+                         sumcov,
                          (label == "") ? other.label : label);
     return sum;
   }
@@ -63,7 +96,7 @@ struct SemanticKeypoint {
     SemanticKeypoint q(pos2d / div,
                        xyz / div,
                        depth / div,
-                       hm,
+                       hm_patch,
                        label);
     return q;
   }
@@ -71,7 +104,8 @@ struct SemanticKeypoint {
   cv::Point2i pos2d;
   cv::Vec3f xyz;
   float depth;
-  float hm;
+  cv::Mat hm_patch;
+  cv::Matx22f cov;
   std::string label;
 };
 
@@ -95,7 +129,7 @@ std::tuple<cv::Mat, cv::Mat, cv::Mat>
   model_forward(torch::jit::script::Module model,
                 const cv::Mat& imgfloat);
 
-std::vector<cv::Point2i> parse_heatmap(cv::Mat & det, const float thresh = 0.05);
+ std::vector<cv::Point2i> parse_keypoints_from_heatmap(cv::Mat & det, const float thresh = 0.05, const int border_threshold = 1);
 
  void visualize_keypoints(cv::Mat& vis,
                           const std::vector<SemanticKeypoint>& semkp_list,

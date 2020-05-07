@@ -56,10 +56,11 @@
               /husky/camera/detection
               /husky/semantic_camera/image_raw
               /unity_ros/husky/TrueState/odom
+              /unity_command/husky/TrueState/odom
               /darknet_ros/bounding_boxes
               /sort_ros/tracked_bounding_boxes
               /sort_ros/detection_image
               /starmap/keypoints
-              /starmap/visualization/compressed
+              /starmap/visualization
               " />
 </launch>
