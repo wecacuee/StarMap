@@ -18,7 +18,7 @@ find_package(catkin_simple REQUIRED)
 
 ## System dependencies are found with CMake's conventions
 find_package(Boost REQUIRED COMPONENTS system program_options filesystem)
-find_package(Torch REQUIRED)
+find_package(Torch 1.4 REQUIRED)
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${TORCH_CXX_FLAGS}")
 find_package(OpenCV 3.4 REQUIRED)
 find_package(Eigen3 REQUIRED)
